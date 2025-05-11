@@ -1,0 +1,10 @@
+name = "MyMlp"
+uuid = "1aeab2a7-b9ad-4ece-9eee-131fe1e27164"
+authors = ["oliwier <oliwierkniazewski@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+
+[compat]
+BenchmarkTools = "1.6.0"
