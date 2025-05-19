@@ -179,7 +179,7 @@ function backward!(order::Vector; seed=1.0)
     result = last(order)   #   The output node
     if all(iszero, result.gradient)
         if isa(result.output, Matrix{Float32})
-            result.gradient = ones(Float64, size(result.output))
+            result.gradient = ones(Float32, size(result.output))
         else
             result.gradient = seed
             @assert length(result.output) == 1 "Gradient is defined only for scalar functions"
