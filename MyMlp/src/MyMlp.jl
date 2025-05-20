@@ -1,210 +1,17 @@
 module MyMlp
-using BenchmarkTools
-using LinearAlgebra
+export xavier_normal, xavier_uniform,
+       xavier_normal!, xavier_uniform!,
+       Dense, Chain,
+       Adam, AdamState,
+       setup_optimizer, step!,
+       build_graph!,
+       collect_model_parameters,
+       show, summary, reset!
+
+
+using ..MyReverseDiff
 using Distributions
-using Random
-using MLDatasets
-using Plots
-using Statistics
-using DataFrames
-using JLD2
 
-import Base: *, +, clamp, log, exp
-#import LinearAlgebra: mul!
-#import Statistics: sum
-
-abstract type GraphNode end
-abstract type Operator <: GraphNode end
-
-# Definition of basic structures for computational graph
-mutable struct Constant{T<:Matrix{Float32}} <: GraphNode
-    output :: T
-end
-
-mutable struct Variable{T<:Matrix{Float32}} <: GraphNode
-    output :: T
-    gradient :: T
-    name :: String
-    
-    Variable(output::T; name="?") where {T<:Matrix{Float32}} = new{T}(output, zeros(Float32, size(output)), name)
-end
-
-mutable struct ScalarOperator{F} <: Operator
-    inputs :: Tuple{GraphNode, GraphNode}
-    output :: Float32
-    gradient :: Float32
-    name :: String
-    ScalarOperator(fun, inputs...; name="?") = new{typeof(fun)}(inputs, 0.0f0, 0.0f0, name)
-end
-
-mutable struct BroadcastedOperator{F} <: Operator
-    inputs :: Union{Tuple{GraphNode, GraphNode}, Tuple{GraphNode}}
-    output :: Matrix{Float32}
-    gradient :: Matrix{Float32}
-    name :: String
-    BroadcastedOperator(fun, inputs...; name="?") = new{typeof(fun)}(inputs, zeros(Float32, 1, 1), zeros(Float32, 1, 1), name)
-end
-
-
-import Base: show, summary
-show(io::IO, x::ScalarOperator{F}) where {F} = print(io, "op ", x.name, "(", F, ")");
-show(io::IO, x::BroadcastedOperator{F}) where {F} = print(io, "op.", x.name, "(", F, ")");
-show(io::IO, x::Constant) = print(io, "const ", x.output)
-show(io::IO, x::Variable) = begin
-    print(io, "var ", x.name);
-    print(io, "\n ┣━ ^ "); summary(io, x.output)
-    print(io, "\n ┗━ ∇ ");  summary(io, x.gradient)
-end
-
-function visit(node::GraphNode, visited, order)
-    if node ∈ visited
-    else
-        push!(visited, node)
-        push!(order, node)
-    end
-    return zeros(Float32, 1, 1)
-end
-
-function visit(node::Operator, visited, order)
-    if node ∈ visited
-    else
-        push!(visited, node)
-        for input in node.inputs
-            visit(input, visited, order)
-        end
-        push!(order, node)
-    end
-    return zeros(Float32, 1, 1)
-end
-
-function topological_sort(head::GraphNode)
-    visited = Set()
-    order = Vector()
-    visit(head, visited, order)
-    return order
-end
-
-
-# x * y (aka matrix multiplication)
-*(A::GraphNode, x::GraphNode) = BroadcastedOperator(mul!, A, x)
-forward(::BroadcastedOperator{typeof(mul!)}, A, x) = return A * x
-backward(::BroadcastedOperator{typeof(mul!)}, A, x, g) = tuple(g * x', A' * g)
-
-# relu activation
-relu(x::GraphNode) = BroadcastedOperator(relu, x)
-forward(::BroadcastedOperator{typeof(relu)}, x) = return x .* (x .> 0.0f0)
-backward(::BroadcastedOperator{typeof(relu)}, x, g) = tuple(g .* (x .> 0.0f0), zeros(Float32, 1, 1))
-
-# add operation (for bias)
-+(x::GraphNode, y::GraphNode) = BroadcastedOperator(+, x, y)
-forward(::BroadcastedOperator{typeof(+)}, x, y) = return x .+ y
-backward(::BroadcastedOperator{typeof(+)}, x, y, g) = begin
-    grad_wrt_x = g
-    grad_wrt_y = sum(g, dims=2)
-    return (grad_wrt_x, grad_wrt_y)
-end
-
-# sigmoid activation
-σ(x::GraphNode) = BroadcastedOperator(σ, x)
-forward(::BroadcastedOperator{typeof(σ)}, x) = return 1.0f0 ./ (1.0f0 .+ exp.(-x))
-backward(node::BroadcastedOperator{typeof(σ)}, x, g) = begin
-    y = node.output
-    local_derivative = y .* (1.0f0 .- y)
-    grad_wrt_x = g .* local_derivative
-    return (grad_wrt_x, zeros(Float32, 1, 1))
-end
-
-function binary_cross_entropy_loss_impl(ŷ, y_true; epsilon=1e-10)
-    ŷ_clamped = clamp.(ŷ, epsilon, 1.0f0 - epsilon)
-    loss_elements = -y_true .* log.(ŷ_clamped) .- (1.0f0 .- y_true) .* log.(1.0f0 .- ŷ_clamped)
-    return mean(loss_elements)
-end
-
-binarycrossentropy(ŷ::GraphNode, y::GraphNode) = ScalarOperator(binary_cross_entropy_loss_impl, ŷ, y)
-
-forward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_value) = begin
-    loss_value = binary_cross_entropy_loss_impl(ŷ_value, y_value)
-    return loss_value
-end
-
-backward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_value, g) = begin
-    epsilon = 1e-10
-    ŷ_clamped_for_grad = clamp.(ŷ_value, epsilon, 1.0f0 - epsilon)
-    local_grad_per_sample = (ŷ_clamped_for_grad .- y_value) ./ (ŷ_clamped_for_grad .* (1.0f0 .- ŷ_clamped_for_grad))
-    batch_size = size(y_value, 2)
-    grad_wrt_ŷ = local_grad_per_sample ./ batch_size
-    return (grad_wrt_ŷ, zeros(Float32, 1, 1))
-end
-
-reset!(node::Constant) = nothing
-reset!(node::Variable) = node.gradient = zeros(Float32, size(node.output))
-
-function reset!(node::Operator)
-    if isa(node.output, Matrix{Float32})
-        node.gradient = zeros(Float32, size(node.output))
-    else
-        node.gradient = 0.0f0
-    end
-end
-#reset!(node::Operator) = node.gradient = zeros(Float32, size(node.output))
-
-compute!(node::Constant) = nothing
-compute!(node::Variable) = nothing
-
-function compute!(node::Operator)
-    node.output = forward(node, [input.output for input in node.inputs]...)
-    if isa(node.output, Matrix{Float32})
-        node.gradient = zeros(Float32, size(node.output))
-    end
-end
-# compute!(node::Operator) =
-#     node.output = forward(node, [input.output for input in node.inputs]...)
-
-function forward!(order::Vector)
-    #   Iteruje przez każdy węzeł w order.
-    for node in order
-        compute!(node)
-        reset!(node)
-    end
-    return last(order).output
-end
-
-update!(node::Constant, gradient) = nothing
-
-update!(node::GraphNode, gradient) = if isnothing(node.gradient)
-    node.gradient = gradient else node.gradient .+= gradient
-end
-
-function backward!(order::Vector; seed=1.0)
-    result = last(order)   #   The output node
-    if all(iszero, result.gradient)
-        if isa(result.output, Matrix{Float32})
-            result.gradient = ones(Float32, size(result.output))
-        else
-            result.gradient = seed
-            @assert length(result.output) == 1 "Gradient is defined only for scalar functions"
-        end
-    end
-
-    for node in reverse(order)   #   Iterate through nodes in reverse topological order.
-        backward!(node)   #   Compute and propagate gradients backwards.
-    end
-    return zeros(Float32, 1, 1)
-end
-
-function backward!(node::Constant) end
-function backward!(node::Variable) end
-
-function backward!(node::Operator)
-    inputs = node.inputs
-
-    gradients = backward(node, [input.output for input in inputs]..., node.gradient)
-
-    for (input, gradient) in zip(inputs, gradients)
-        update!(input, gradient)
-    end
-    return zeros(Float32, 1, 1)
-end
 
 function xavier_uniform(size::Tuple{Int, Int})
     limit = sqrt(6.0f0 / (size[1] + size[2]))
@@ -228,122 +35,150 @@ function xavier_normal!(w::Matrix{Float32})
     Float32.(rand!(Normal(0.0f0, limit), w))
 end
 
-function get_weights(order::Vector)
-    weights = Vector{Tuple{String, Variable}}()
-    for node in order
-        if isa(node, Variable)
-            if occursin("w", node.name)
-                push!(weights, (node.name, node))
-            end
-        end
-    end
-    return weights
+
+abstract type Layer end
+
+mutable struct Dense <: Layer
+    W::Variable
+    b::Variable
+    activation
+    name::String
 end
 
-function get_biases(order::Vector)
-    biases = Vector{Tuple{String, Variable}}()
-    for node in order
-        if isa(node, Variable)
-            if occursin("b", node.name)
-                push!(biases, (node.name, node))
-            end
-        end
-    end
-    return biases
+function Dense(in_features::Int, out_features::Int, activation=identity; 
+    weight_init = xavier_uniform,
+    bias_init = (dims) -> zeros(Float32, dims),
+    name="dense")
+
+    W = Variable(weight_init((out_features, in_features)); name="$(name)_w")
+
+    b = Variable(bias_init((out_features, 1)); name="$(name)_b")
+
+    return Dense(W, b, activation, name)
 end
 
-function get_weights_and_biases(order::Vector)
-    parameters = Vector{Tuple{String, Variable}}()
-    for node in order
-        if isa(node, Variable)
-            if occursin("w", node.name) || occursin("b", node.name)
-                push!(parameters, (node.name, node))
-            end
+function (d::Dense)(x::GraphNode)
+
+    multiplication_code = *(d.W, x, name="$(d.name)_mul")
+    #   Dodanie biasu
+    linear_output = +(multiplication_code, d.b, name="$(d.name)_add")
+    # Przekazanie nazwy operatorowi aktywacji
+    if d.activation == relu
+        return relu(linear_output, name="$(d.name)_relu")
+    elseif d.activation == σ
+        return σ(linear_output, name="$(d.name)_sigmoid")
+    else
+        #   Użyj domyślnej nazwy
+        try
+             return d.activation(linear_output, name="$(d.name)_$(string(nameof(d.activation)))")
+        catch
+             return d.activation(linear_output)
         end
     end
-    return parameters
 end
 
-function get_gradients(order::Vector)
-    gradients = Vector{Tuple{String, Variable}}()
-    for node in order
-        if isa(node, Variable)
-            if occursin("w", node.name) || occursin("b", node.name)
-                push!(gradients, (node.name, node))
-            end
-        end
+mutable struct Chain
+    layers::Vector{<:Layer}
+end
+
+Chain(layers...) = Chain([layers...])
+
+function (c::Chain)(x::GraphNode)
+    input = x
+    for layer in c.layers
+        input = layer(input)
     end
-    return gradients
+    return input
 end
 
-mutable struct Adam
+function build_graph!(model::Chain, loss_fn, input_node::GraphNode, label_node::GraphNode; loss_name="loss")
+
+    model_output_node = model(input_node)
+    loss_node = loss_fn(model_output_node, label_node; name=loss_name)
+
+    if hasproperty(loss_node, :name)
+        loss_node.name = loss_name
+    end
+
+    order = topological_sort(loss_node)
+
+    return (loss_node, model_output_node, order)
+
+end
+
+
+
+
+abstract type AbstractOptimizer end
+
+struct Adam <: AbstractOptimizer
     α :: Float32    # learning rate
     β1 :: Float32   # First moment decay rate
     β2 :: Float32   # Second moment decay rate
     ε :: Float32    # Epsilon for numerical stability
-
-    #   Stan optymalizatora
-    m :: Dict{String, Matrix{Float32}}  # First moment estimate
-    v :: Dict{String, Matrix{Float32}}  # Second moment estimate
-    t :: Int  # Time step
-
-    #   Parametry optymalizatora
-    parameters :: Vector{Tuple{String, Variable}}   #   Wszystkie parametry (wagi i biasy)
 end
 
-function init!(order::Vector{Any}, α=0.001f0, β1=0.9f0, β2=0.999f0, ε=1e-8)
-    parameters = get_weights_and_biases(order)
-    
+Adam() = Adam(0.001f0, 0.9f0, 0.999f0, 1e-8)
+
+mutable struct AdamState
+    hyperparams :: Adam # Przechowuje konfigurację optymalizatora
+    m :: Dict{String, Matrix{Float32}}
+    v :: Dict{String, Matrix{Float32}}
+    t :: Int
+    parameters :: Vector{Tuple{String, Variable}}
+end
+
+function setup_optimizer(optimizer_config::AbstractOptimizer, model::Chain)
+    trainable_vars = collect_model_parameters(model)
     m = Dict{String, Matrix{Float32}}()
     v = Dict{String, Matrix{Float32}}()
-    for (name, var) in parameters
+    for (name, var) in trainable_vars
         m[name] = zeros(Float32, size(var.output))
         v[name] = zeros(Float32, size(var.output))
     end
-    return Adam(α, β1, β2, ε, m, v, 0, parameters)
+    return AdamState(optimizer_config, m, v, 0, trainable_vars)
 end
 
-function step!(optimizer::Adam)
-    optimizer.t += 1
+function collect_model_parameters(model::Chain)
+    all_params = Vector{Tuple{String, Variable}}()
+    for layer in model.layers
+        append!(all_params, collect_model_parameters(layer))
+    end
+    return all_params
+end
 
-    for (name, var) in optimizer.parameters
+function collect_model_parameters(layer::Dense)
+    return [(layer.W.name, layer.W), (layer.b.name, layer.b)]
+end
+
+function step!(optimizer_state::AdamState)
+    optimizer_state.t += 1
+
+    config = optimizer_state.hyperparams # Dostęp do hyperparametrów z konfiguracji
+
+    for (name, var) in optimizer_state.parameters
         g = var.gradient
 
-        #   Aktualizuj momenty
-        optimizer.m[name] = optimizer.β1 * optimizer.m[name] + (1 - optimizer.β1) * g
-        optimizer.v[name] = optimizer.β2 * optimizer.v[name] + (1 - optimizer.β2) * (g .^ 2)
+        optimizer_state.m[name] = config.β1 * optimizer_state.m[name] + (1 - config.β1) * g
+        optimizer_state.v[name] = config.β2 * optimizer_state.v[name] + (1 - config.β2) * (g .^ 2)
 
-        #   Popraw momenty
-        m_corrected = optimizer.m[name] / (1 - optimizer.β1 ^ optimizer.t)
-        v_corrected = optimizer.v[name] / (1 - optimizer.β2 ^ optimizer.t)
+        m_corrected = optimizer_state.m[name] / (1 - config.β1 ^ optimizer_state.t)
+        v_corrected = optimizer_state.v[name] / (1 - config.β2 ^ optimizer_state.t)
 
-        #   Aktualizuj parametry
-        var.output .-= optimizer.α .* m_corrected ./ (sqrt.(v_corrected) .+ optimizer.ε)
+        var.output .-= config.α .* m_corrected ./ (sqrt.(v_corrected) .+ config.ε)
     end
 end
 
-function reset!(optimizer::Adam)
-    optimizer.t = 0
+function reset!(optimizer_state::AdamState)
+    optimizer_state.t = 0
     #  Reset momentów
-    for (name, var) in optimizer.parameters
-        optimizer.m[name] .= zeros(size(var.output))
-        optimizer.v[name] .= zeros(size(var.output))
+    for (name, var) in optimizer_state.parameters
+        optimizer_state.m[name] .= zeros(size(var.output))
+        optimizer_state.v[name] .= zeros(size(var.output))
     end
 end
 
-function get_state(optimizer::Adam)
-    return Dict(
-        "t" => optimizer.t,
-        "m" => deepcopy(optimizer.m),
-        "v" => deepcopy(optimizer.v)
-    )
-end
 
-function set_state!(optimizer::Adam, state::Dict)
-    optimizer.t = state["t"]
-    optimizer.m = state["m"]
-    optimizer.v = state["v"]
-end
 
 end # module MyMlp
 
