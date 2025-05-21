@@ -1,7 +1,7 @@
 module MyMlp
 export xavier_normal, xavier_uniform,
        xavier_normal!, xavier_uniform!,
-       Dense, Chain,
+       Dense, ConvolutionBlock, FlattenBlock, Chain,
        Adam, AdamState,
        setup_optimizer, step!,
        build_graph!,
@@ -178,7 +178,62 @@ function reset!(optimizer_state::AdamState)
     end
 end
 
+# Convolution
 
+mutable struct ConvolutionBlock <: Layer
+    masks::Variable
+    pool_fun::Function
+    pool_size::Constant
+    act_fun::Function
+    name::String
+end
+
+function ConvolutionBlock(mask_count::Int, mask_size::Int, size::Int;
+    weight_init = xavier_uniform,
+    pool_fun=max_pool,
+    act_fun=relu,
+    name="convolution")
+
+    masks = Variable(weight_init((mask_count, mask_size)); name="$(name)_masks")
+    pool_size = Constant([Float32(size);;])
+
+    return ConvolutionBlock(masks, pool_fun, pool_size, act_fun, name)
+end
+
+function (c::ConvolutionBlock)(x::GraphNode)
+    cl = conv(x,c.masks)
+    cl.name = "$(c.name)_conv"
+
+    pl = c.pool_fun(cl,c.pool_size)
+    pl.name = "$(c.name)_pool"
+
+    al = c.act_fun(pl)
+    al.name = "$(c.name)_active"
+
+    return al
+end
+
+mutable struct FlattenBlock <: Layer
+    name::String
+end
+
+function FlattenBlock(;name="flatten")
+    return FlattenBlock(name)
+end
+
+function (f::FlattenBlock)(x::GraphNode)
+    fl = flatten(x)
+    fl.name = f.name
+    return fl
+end
+
+function collect_model_parameters(layer::FlattenBlock)
+    return []
+end
+
+function collect_model_parameters(layer::ConvolutionBlock)
+    return [(layer.masks.name, layer.masks)]
+end
 
 end # module MyMlp
 
