@@ -46,10 +46,6 @@ mutable struct BroadcastedOperator{F} <: Operator
     BroadcastedOperator(fun, inputs...; name="?") = new{typeof(fun)}(inputs, zeros(Float32, 1, 1), zeros(Float32, 1, 1), name)
 end
 
-
-
-
-
 function visit(node::GraphNode, visited, order)
     if node ∈ visited
     else
@@ -132,10 +128,10 @@ end
 
 # Convolution
  
-function convolution(x::Vector{Float64}, m::Vector{Float64})
+function convolution(x::Vector{Float32}, m::Vector{Float32})
     k = length(m)
     l = length(x)
-    x_new = zeros(l)
+    x_new = zeros(Float32,l,1)
     ll = l-k+1
     for i=1:ll
         x_new[i] = sum(x[i:i+k-1].*m)
@@ -146,20 +142,20 @@ function convolution(x::Vector{Float64}, m::Vector{Float64})
     return x_new
 end
 
-function multi_convolution(x::Matrix{Float64},m::Matrix{Float64})
-    l = size(m,1)
-    x_new = zeros(l*size(x,1),size(x,2))
-    for j=1:size(x,1)
+function multi_convolution(x::Matrix{Float32},m::Matrix{Float32})
+    l = size(m,2)
+    x_new = zeros(Float32,size(x,1),l*size(x,2))
+    for j=1:size(x,2)
         for i=1:l
-            x_new[(j-1)*l+i,:] = convolution(x[j,:],m[i,:])
+            x_new[:,(j-1)*l+i] = convolution(x[:,j],m[:,i])
         end
     end
     return x_new
 end
 
-function dif_convolution(x::Matrix{Float64}, m::Matrix{Float64}, g::Matrix{Float64})
+function dif_convolution(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float32})
     lx = size(x,2)
-    dx = zeros(size(x,1),lx)
+    dx = zeros(Float32,size(x,1),lx)
 
     size_diff = div(size(g,1),size(x,1))
 
@@ -168,46 +164,47 @@ function dif_convolution(x::Matrix{Float64}, m::Matrix{Float64}, g::Matrix{Float
     end
 
     tmp = multi_convolution(x,g)
-    dm = zeros(size(m)...)
+    dm = zeros(Float32,size(m)...)
     for i=1:size(dm,1)
         t = tmp[i:size(dm,1):end, :]
         tt = sum(t,dims=1)
         dm[i,:] = reverse(tt[:,(lx-size(m,2)+1):lx], dims=2)
     end
-    
     return tuple(dx,dm)
 end
 
 # Max Pool
-function m_pool(x::Matrix{Float64},m::Int64)
-    x_new = zeros(size(x,1),div(size(x,2),m))
-    for i=1:size(x_new,1)
-        for j=1:size(x_new,2)
-            a = argmax(x[i,j*m-m+1:j*m])
-            x_new[i,j] = x[i,j*m-m+a]
+function m_pool(x::Matrix{Float32},mf::Matrix{Float32})
+    m = Int64(mf[1])
+    x_new = zeros(Float32,div(size(x,1),m),size(x,2))
+    for i=1:size(x_new,2)
+        for j=1:size(x_new,1)
+            a = argmax(x[j*m-m+1:j*m,i])
+            x_new[j,i] = x[j*m-m+a,i]
         end
     end
     return x_new
 end
 
-function dif_max_pool(x::Matrix{Float64},m::Int64, g::Matrix{Float64})
-    x_new = zeros(size(x)...)
-    for i=1:size(x_new,1)
-        for j=1:div.(size(x_new)[2],m)
-            a = argmax(x[i,j*m-m+1:j*m])
-            x_new[i,a+(j-1)*m] = g[i,j]
+function dif_max_pool(x::Matrix{Float32},mf::Matrix{Float32}, g::Matrix{Float32})
+    m = Int64(mf[1])
+    x_new = zeros(Float32,size(x)...)
+    for i=1:size(x_new,2)
+        for j=1:div.(size(x_new,1),m)
+            a = argmax(x[j*m-m+1:j*m, i])
+            x_new[a+(j-1)*m,i] = g[j,i]
         end
     end
     return tuple(x_new, 1.0)
 end
 
 # m->mask size l->layers number
-function extend_input(x::Matrix{Float64}, m::Int64, l::Int64)
+function extend_input(x::Matrix{Float32}, m::Int64, l::Int64)
     E = size(x,2)
     if E%(m^l)!=0
         E+=m^l-E%(m^l)
     end
-    x_new = zeros(1,E)
+    x_new = zeros(Float32,1,E)
     x_new[1:length(x)] = x
     return x_new
 end
@@ -215,22 +212,22 @@ end
 #CNN
 conv(x::GraphNode, m::GraphNode) = BroadcastedOperator(conv,x,m)
 forward(::BroadcastedOperator{typeof(conv)}, x, m) = return multi_convolution(x,m)
-backward(node::BroadcastedOperator{typeof(conv)}, x, m, g) = return dif_convolution(x,m,g)
+backward(::BroadcastedOperator{typeof(conv)}, x, m, g) = return dif_convolution(x,m,g)
 
 max_pool(x::GraphNode, m::GraphNode) = BroadcastedOperator(max_pool,x,m)
-forward(::BroadcastedOperator{typeof(m_pool)}, x, m) = return m_pool(x, m)
-backward(node::BroadcastedOperator{typeof(m_pool)}, x, m, g) = return dif_max_pool(x,m,g)
+forward(::BroadcastedOperator{typeof(max_pool)}, x, m) = return m_pool(x, m)
+backward(::BroadcastedOperator{typeof(max_pool)}, x, m, g) = return dif_max_pool(x,m,g)
 
 flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
 forward(::BroadcastedOperator{typeof(flatten)}, x) = begin
-    new_x = zeros(size(x,1)*size(x,2))
+    new_x = zeros(Float32,size(x,1)*size(x,2),1)
     for i=1:length(new_x)
         new_x[i]=x[i]
     end
     return new_x
 end
 backward(::BroadcastedOperator{typeof(flatten)}, x, g) = begin
-    dx = zeros(size(x)...)
+    dx = zeros(Float32,size(x)...)
     for i=1:length(dx)
         dx[i]=g[i]
     end
@@ -273,8 +270,12 @@ end
 
 update!(node::Constant, gradient) = nothing
 
-update!(node::GraphNode, gradient) = if isnothing(node.gradient)
-    node.gradient = gradient else node.gradient .+= gradient
+update!(node::GraphNode, gradient) = let
+    if isnothing(node.gradient)
+        node.gradient = gradient 
+    else
+        node.gradient .+= gradient
+    end
 end
 
 function backward!(order::Vector; seed=1.0)
