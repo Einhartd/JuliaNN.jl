@@ -154,21 +154,22 @@ function multi_convolution(x::Matrix{Float32},m::Matrix{Float32})
 end
 
 function dif_convolution(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float32})
-    lx = size(x,2)
-    dx = zeros(Float32,size(x,1),lx)
+    lx = size(x,1)                      #Dlugosc obrazu
+    dx = zeros(Float32,size(x)...)      #Dx
 
-    size_diff = div(size(g,1),size(x,1))
+    size_diff = size(m,2)  #div(size(g,2),size(x,2))#Liczba masek
 
-    for i=1:size(g,1)
-        dx[1+div(i-1,size_diff),:] .+= convolution(g[i,:],reverse(m[i%size_diff+1,:]))
+    for i=1:size(g,2)                   #Obrazy wyjściowe
+        #Zwężenie                       #obraz g,   maska
+        dx[:,1+div(i-1,size_diff)] .+= convolution(g[:,i],reverse(m[:,i%size_diff+1]))
     end
 
     tmp = multi_convolution(x,g)
     dm = zeros(Float32,size(m)...)
-    for i=1:size(dm,1)
-        t = tmp[i:size(dm,1):end, :]
-        tt = sum(t,dims=1)
-        dm[i,:] = reverse(tt[:,(lx-size(m,2)+1):lx], dims=2)
+    for i=1:size(dm,2)                  #liczba masek
+        t = tmp[:, i:size(dm,2):end]    
+        tt = sum(t,dims=2)
+        dm[:,i] = reverse(tt[(lx-size(m,2)+1):lx,:], dims=1)
     end
     return tuple(dx,dm)
 end
