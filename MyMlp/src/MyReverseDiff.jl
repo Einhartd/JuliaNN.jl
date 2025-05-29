@@ -232,6 +232,20 @@ function m_pool(x::Matrix{Float32},mf::Matrix{Float32})
     return x_new
 end
 
+function m_pool(x::Array{Float32,3},mf::Matrix{Float32})
+    m = Int64(mf[1])
+    x_new = zeros(Float32,div(size(x,1),m),size(x,2),size(x,3))
+    for z=1:size(x_new,3)
+        for i=1:size(x_new,2)
+            for j=1:size(x_new,1)
+                a = argmax(x[j*m-m+1:j*m,i,z])
+                x_new[j,i,z] = x[j*m-m+a,i,z]
+            end
+        end
+    end
+    return x_new
+end
+
 function dif_max_pool(x::Matrix{Float32},mf::Matrix{Float32}, g::Matrix{Float32})
     m = Int64(mf[1])
     x_new = zero(x)
@@ -239,6 +253,20 @@ function dif_max_pool(x::Matrix{Float32},mf::Matrix{Float32}, g::Matrix{Float32}
         for j=1:div.(size(x_new,1),m)
             a = argmax(x[j*m-m+1:j*m, i])
             x_new[a+(j-1)*m,i] = g[j,i]
+        end
+    end
+    return tuple(x_new, 1.0)
+end
+
+function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,3})
+    m = Int64(mf[1])
+    x_new = zero(x)
+    for z=1:size(x_new,3)
+        for i=1:size(x_new,2)
+            for j=1:div.(size(x_new,1),m)
+                a = argmax(x[j*m-m+1:j*m, i,z])
+                x_new[a+(j-1)*m,i,z] = g[j,i,z]
+            end
         end
     end
     return tuple(x_new, 1.0)
@@ -265,20 +293,9 @@ forward(::BroadcastedOperator{typeof(max_pool)}, x, m) = return m_pool(x, m)
 backward(::BroadcastedOperator{typeof(max_pool)}, x, m, g) = return dif_max_pool(x,m,g)
 
 flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
-forward(::BroadcastedOperator{typeof(flatten)}, x) = begin
-    new_x = zeros(Float32,size(x,1)*size(x,2),1)
-    for i=1:length(new_x)
-        new_x[i]=x[i]
-    end
-    return new_x
-end
-backward(::BroadcastedOperator{typeof(flatten)}, x, g) = begin
-    dx = zeros(Float32,size(x)...)
-    for i=1:length(dx)
-        dx[i]=g[i]
-    end
-    return dx
-end
+forward(::BroadcastedOperator{typeof(flatten)}, x) = return reshape(x,size(x,1)*size(x,2),size(x,3))
+
+backward(::BroadcastedOperator{typeof(flatten)}, x, g) = return reshape(g,size(x))
 
 reset!(node::Constant) = nothing
 reset!(node::Variable) = node.gradient = zeros(Float32, size(node.output))
