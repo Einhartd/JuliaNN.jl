@@ -106,9 +106,6 @@ function build_graph!(model::Chain, loss_fn, input_node::GraphNode, label_node::
 
 end
 
-
-
-
 abstract type AbstractOptimizer end
 
 struct Adam <: AbstractOptimizer
@@ -194,7 +191,7 @@ function ConvolutionBlock(mask_count::Int, mask_size::Int, size::Int;
     act_fun=relu,
     name="convolution")
 
-    masks = Variable(weight_init((mask_count, mask_size)); name="$(name)_masks")
+    masks = Variable(weight_init((mask_size, mask_count)); name="$(name)_masks")
     pool_size = Constant([Float32(size);;])
 
     return ConvolutionBlock(masks, pool_fun, pool_size, act_fun, name)
@@ -227,7 +224,7 @@ function (f::FlattenBlock)(x::GraphNode)
     return fl
 end
 
-function collect_model_parameters(layer::FlattenBlock)
+function collect_model_parameters(::FlattenBlock)
     return []
 end
 

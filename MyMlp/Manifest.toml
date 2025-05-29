@@ -1,8 +1,19 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.0"
+julia_version = "1.11.4"
 manifest_format = "2.0"
-project_hash = "23d49c6e4465916fdf1f7530d3fd374e21cf7a35"
+project_hash = "187eaf2a6ef3a9130f076d5ad91cb82a85de7f2e"
+
+[[deps.AbstractFFTs]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "d92ad398961a3ed262d8bf04a1a2b8340f915fef"
+uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+version = "1.5.0"
+weakdeps = ["ChainRulesCore", "Test"]
+
+    [deps.AbstractFFTs.extensions]
+    AbstractFFTsChainRulesCoreExt = "ChainRulesCore"
+    AbstractFFTsTestExt = "Test"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
@@ -391,6 +402,18 @@ git-tree-sha1 = "466d45dc38e15794ec7d5d63ec03d776a9aff36e"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.4+1"
 
+[[deps.FFTW]]
+deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
+git-tree-sha1 = "7de7c78d681078f027389e067864a8d53bd7c3c9"
+uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+version = "1.8.1"
+
+[[deps.FFTW_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "6d6219a004b8cf1e0b4dbe27a2860b8e04eba0be"
+uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
+version = "3.3.11+0"
+
 [[deps.FLoops]]
 deps = ["BangBang", "Compat", "FLoopsBase", "InitialValues", "JuliaVariables", "MLStyle", "Serialization", "Setfield", "Transducers"]
 git-tree-sha1 = "0a2e5873e9a5f54abb06418d57a8df689336a660"
@@ -614,6 +637,12 @@ version = "1.4.3"
     [deps.InlineStrings.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
     Parsers = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
+
+[[deps.IntelOpenMP_jll]]
+deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl"]
+git-tree-sha1 = "0f14a5456bdc6b9731a5682f439a672750a09e48"
+uuid = "1d5cc7b8-4909-519e-a0f8-d0f5ad9712d0"
+version = "2025.0.4+0"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -884,6 +913,12 @@ git-tree-sha1 = "1d2dd9b186742b0f317f2530ddcbf00eebb18e96"
 uuid = "23992714-dd62-5051-b70f-ba57cb901cac"
 version = "0.10.7"
 
+[[deps.MKL_jll]]
+deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
+git-tree-sha1 = "5de60bc6cb3899cd318d80d627560fae2e2d99ae"
+uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
+version = "2025.0.1+1"
+
 [[deps.MLCore]]
 deps = ["DataAPI", "SimpleTraits", "Tables"]
 git-tree-sha1 = "73907695f35bc7ffd9f11f6c4f2ee8c1302084be"
@@ -1075,7 +1110,7 @@ version = "0.3.27+1"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
+version = "0.8.1+4"
 
 [[deps.OpenMPI_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML", "Zlib_jll"]
@@ -1927,6 +1962,12 @@ version = "1.1.6+0"
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
 version = "1.59.0+0"
+
+[[deps.oneTBB_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "d5a767a3bb77135a99e433afe0eb14cd7f6914c3"
+uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
+version = "2022.0.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
