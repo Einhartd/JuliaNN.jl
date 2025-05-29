@@ -10,9 +10,11 @@ export xavier_normal, xavier_uniform,
 
 
 using ..MyReverseDiff
+using ..MyEmbedding
 using Distributions
 
 
+# --- Funkcje inicjalizacji wag ---
 function xavier_uniform(size::Tuple{Int, Int})
     limit = sqrt(6.0f0 / (size[1] + size[2]))
     return Float32.(rand(Uniform(-limit, limit), size))
@@ -35,9 +37,11 @@ function xavier_normal!(w::Matrix{Float32})
     Float32.(rand!(Normal(0.0f0, limit), w))
 end
 
-
+# --- Abstrakcyjny typ warstwy ---
 abstract type Layer end
 
+
+# --- Warstwa Dense ---
 mutable struct Dense <: Layer
     W::Variable
     b::Variable
@@ -77,6 +81,44 @@ function (d::Dense)(x::GraphNode)
     end
 end
 
+
+# --- Warstwa Embedding ---
+mutable struct Embedding <: Layer
+    W::Variable # Węzeł GraphNode przechowujący macierz embeddingów
+    padding_idx::Union{Int, Nothing} # Indeks paddingu, jeśli jest zdefiniowany
+    name::String
+end
+
+function Embedding(vocab_size::Int, embedding_dim::Int;
+                   weight_init = (dims) -> MyReverseDiff.xavier_uniform(dims),
+                   padding_idx::Union{Int, Nothing} = nothing,
+                   name="embedding_layer")
+
+    W_val = weight_init((embedding_dim, vocab_size))
+    W = MyReverseDiff.Variable(W_val; name="$(name)_W")
+
+    return Embedding(W, padding_idx, name)
+end
+
+function Embedding(initial_weights::Matrix{Float32};
+                   padding_idx::Union{Int, Nothing} = nothing,
+                   name="embedding_layer")
+
+    # Wymiary vocab_size i embedding_dim są inferowane z podanej macierzy
+    embedding_dim, vocab_size = size(initial_weights) 
+    
+    W = MyReverseDiff.Variable(initial_weights; name="$(name)_W")
+
+    return Embedding(W, padding_idx, name)
+end
+
+function (e::Embedding)(x::MyReverseDiff.GraphNode)
+    # Wywołuje funkcję `embedding` z modułu MyEmbedding
+    return MyEmbedding.embedding(e.W, x; name="$(e.name)_output")
+end
+
+
+# --- Warstwa Chain ---
 mutable struct Chain
     layers::Vector{<:Layer}
 end
