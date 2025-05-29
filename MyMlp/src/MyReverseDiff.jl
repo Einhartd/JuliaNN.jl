@@ -18,16 +18,16 @@ import Statistics: sum
 abstract type GraphNode end
 abstract type Operator <: GraphNode end
 
-mutable struct Constant{T<:Matrix{Float32}} <: GraphNode
+mutable struct Constant{T} <: GraphNode
     output :: T
 end
 
-mutable struct Variable{T<:Matrix{Float32}} <: GraphNode
+mutable struct Variable{T<:AbstractArray{Float32}} <: GraphNode
     output :: T
     gradient :: T
     name :: String
     
-    Variable(output::T; name="?") where {T<:Matrix{Float32}} = new{T}(output, zeros(Float32, size(output)), name)
+    Variable(output::T; name="?") where {T<:AbstractArray{Float32}} = new{T}(output, zeros(Float32, size(output)), name)
 end
 
 mutable struct ScalarOperator{F} <: Operator
@@ -39,9 +39,9 @@ mutable struct ScalarOperator{F} <: Operator
 end
 
 mutable struct BroadcastedOperator{F} <: Operator
-    inputs :: Union{Tuple{GraphNode, GraphNode}, Tuple{GraphNode}}
-    output :: Matrix{Float32}
-    gradient :: Matrix{Float32}
+    inputs :: NTuple{N, GraphNode} where N
+    output :: AbstractArray{Float32}
+    gradient :: AbstractArray{Float32}
     name :: String
     BroadcastedOperator(fun, inputs...; name="?") = new{typeof(fun)}(inputs, zeros(Float32, 1, 1), zeros(Float32, 1, 1), name)
 end
@@ -56,7 +56,7 @@ function visit(node::GraphNode, visited, order)
         push!(visited, node)
         push!(order, node)
     end
-    return zeros(Float32, 1, 1)
+    return nothing
 end
 
 function visit(node::Operator, visited, order)
@@ -68,12 +68,12 @@ function visit(node::Operator, visited, order)
         end
         push!(order, node)
     end
-    return zeros(Float32, 1, 1)
+    return nothing
 end
 
 function topological_sort(head::GraphNode)
-    visited = Set()
-    order = Vector()
+    visited = Set{GraphNode}()
+    order = Vector{GraphNode}()
     visit(head, visited, order)
     return order
 end
@@ -87,7 +87,7 @@ backward(::BroadcastedOperator{typeof(mul!)}, A, x, g) = tuple(g * x', A' * g)
 # relu activation
 relu(x::GraphNode; name="relu") = BroadcastedOperator(relu, x, name=name)
 forward(::BroadcastedOperator{typeof(relu)}, x) = return x .* (x .> 0.0f0)
-backward(::BroadcastedOperator{typeof(relu)}, x, g) = tuple(g .* (x .> 0.0f0), zeros(Float32, 1, 1))
+backward(::BroadcastedOperator{typeof(relu)}, x, g) = tuple(g .* (x .> 0.0f0))
 
 # add operation (for bias)
 +(x::GraphNode, y::GraphNode; name="sum") = BroadcastedOperator(+, x, y, name=name)
@@ -105,13 +105,13 @@ backward(node::BroadcastedOperator{typeof(σ)}, x, g) = begin
     y = node.output
     local_derivative = y .* (1.0f0 .- y)
     grad_wrt_x = g .* local_derivative
-    return (grad_wrt_x, zeros(Float32, 1, 1))
+    return (grad_wrt_x, )
 end
 
 function binary_cross_entropy_loss_impl(ŷ, y_true; epsilon=1e-10)
     ŷ_clamped = clamp.(ŷ, epsilon, 1.0f0 - epsilon)
     loss_elements = -y_true .* log.(ŷ_clamped) .- (1.0f0 .- y_true) .* log.(1.0f0 .- ŷ_clamped)
-    return mean(loss_elements)
+    return Float32(mean(loss_elements))
 end
 
 binarycrossentropy(ŷ::GraphNode, y::GraphNode; name="bce_loss") = ScalarOperator(binary_cross_entropy_loss_impl, ŷ, y, name=name)
@@ -127,14 +127,14 @@ backward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_v
     local_grad_per_sample = (ŷ_clamped_for_grad .- y_value) ./ (ŷ_clamped_for_grad .* (1.0f0 .- ŷ_clamped_for_grad))
     batch_size = size(y_value, 2)
     grad_wrt_ŷ = local_grad_per_sample ./ batch_size
-    return (grad_wrt_ŷ, zeros(Float32, 1, 1))
+    return (grad_wrt_ŷ, zeros(Float32, size(y_value)))
 end
 
 reset!(node::Constant) = nothing
 reset!(node::Variable) = node.gradient = zeros(Float32, size(node.output))
 
 function reset!(node::Operator)
-    if isa(node.output, Matrix{Float32})
+    if isa(node.output, AbstractArray{Float32})
         node.gradient = zeros(Float32, size(node.output))
     else
         node.gradient = 0.0f0
@@ -142,17 +142,45 @@ function reset!(node::Operator)
 end
 #reset!(node::Operator) = node.gradient = zeros(Float32, size(node.output))
 
+
+
 compute!(node::Constant) = nothing
 compute!(node::Variable) = nothing
 
+# function compute!(node::Operator)
+#     node.output = forward(node, [input.output for input in node.inputs]...)
+#     if isa(node.output, AbstractArray{Float32})
+#         node.gradient = zeros(Float32, size(node.output))
+#     end
+# end
+
 function compute!(node::Operator)
-    node.output = forward(node, [input.output for input in node.inputs]...)
-    if isa(node.output, Matrix{Float32})
-        node.gradient = zeros(Float32, size(node.output))
+    # Wywołaj forward, aby otrzymać wynik
+    new_output_val = forward(node, [input.output for input in node.inputs]...)
+
+    # Obsługa skalarnych i tablicowych wyjść
+    if isa(node, ScalarOperator) # Jeśli to ScalarOperator
+        node.output = Float32(new_output_val) # Po prostu przypisz wartość, upewniając się, że jest Float32
+        node.gradient = 0.0f0 # Zawsze inicjuj gradient skalarny na 0.0f0
+    else # Jeśli to BroadcastedOperator (lub inny operator z wyjściem tablicowym)
+        if size(node.output) != size(new_output_val)
+            node.output = new_output_val # Przypisz nową, poprawną tablicę
+        else
+            # W przeciwnym razie, skopiuj wartości do istniejącej tablicy
+            # Upewnij się, że typy się zgadzają: Float32
+            copyto!(node.output, Float32.(new_output_val)) # Konwertuj na Float32, jeśli new_output_val jest Float64
+        end
+
+        # Podobnie dla gradientu:
+        if size(node.gradient) != size(node.output)
+            node.gradient = zeros(Float32, size(node.output))
+        else
+            fill!(node.gradient, 0.0f0) # Wypełnij zerami istniejący gradient
+        end
     end
 end
-# compute!(node::Operator) =
-#     node.output = forward(node, [input.output for input in node.inputs]...)
+
+
 
 function forward!(order::Vector)
     #   Iteruje przez każdy węzeł w order.
@@ -170,10 +198,10 @@ update!(node::GraphNode, gradient) = if isnothing(node.gradient)
     node.gradient = gradient else node.gradient .+= gradient
 end
 
-function backward!(order::Vector; seed=1.0)
+function backward!(order::Vector; seed=1.0f0)
     result = last(order)   #   The output node
     if all(iszero, result.gradient)
-        if isa(result.output, Matrix{Float32})
+        if isa(result.output, AbstractArray{Float32})
             result.gradient = ones(Float32, size(result.output))
         else
             result.gradient = seed
@@ -184,7 +212,7 @@ function backward!(order::Vector; seed=1.0)
     for node in reverse(order)   #   Iterate through nodes in reverse topological order.
         backward!(node)   #   Compute and propagate gradients backwards.
     end
-    return zeros(Float32, 1, 1)
+    return nothing
 end
 
 function backward!(node::Constant) end
@@ -198,7 +226,7 @@ function backward!(node::Operator)
     for (input, gradient) in zip(inputs, gradients)
         update!(input, gradient)
     end
-    return zeros(Float32, 1, 1)
+    return nothing
 end
 
 
@@ -212,5 +240,13 @@ show(io::IO, x::Variable) = begin
     print(io, "\n ┗━ ∇ ");  summary(io, x.gradient)
 end
 
+
+
+# Include submodule
+include("MyEmbedding.jl")
+using .MyEmbedding
+
+# Re-export embedding functions
+export embedding
 
 end
