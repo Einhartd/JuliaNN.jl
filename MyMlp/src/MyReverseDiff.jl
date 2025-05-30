@@ -132,7 +132,13 @@ function multi_convolution_fast!(x_new::Matrix{Float32},x::Matrix{Float32},m::Ma
     return x_new
 end
 
-function multi_convolution_fast!(x_new::Matrix{Float32},x::SubArray{Float32, 2, Matrix{Float32}, Tuple{Base.Slice{Base.OneTo{Int64}}, StepRange{Int64, Int64}}, false},m::Matrix{Float32})
+function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},m::Matrix{Float32})
+    c = size(m,1)
+    x_new .= reshape(im2col_p(x,c)*m,:,size(m,2)*size(x,2))
+    return x_new
+end
+
+function multi_convolution_fast!(x_new::Matrix{Float32},x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},m::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true})
     c = size(m,1)
     x_new .= reshape(im2col_p(x,c)*m,:,size(m,2)*size(x,2))
     return x_new
@@ -141,6 +147,16 @@ end
 function multi_convolution(x::Matrix{Float32},m::Matrix{Float32})
     y = zeros(Float32,size(x,1),size(x,2)*size(m,2))
     return multi_convolution_fast!(y,x,m)
+end
+
+function multi_convolution(x::Array{Float32,3},m::Matrix{Float32})
+    y = zeros(Float32,size(x,1),size(x,2)*size(m,2),size(x,3))
+    for z=1:size(x,3)
+        yv = @view(y[:,:,z])
+        xv = @view(x[:,:,z])
+        multi_convolution_fast!(yv,xv,m)
+    end
+    return y
 end
 
 @inline function im2col_p(Ao::Matrix{Float32}, m::Int64)
@@ -156,7 +172,7 @@ end
     return B'
 end
 
-@inline function im2col_p(Ao::SubArray{Float32, 2, Matrix{Float32}, Tuple{Base.Slice{Base.OneTo{Int64}}, StepRange{Int64, Int64}}, false}, m::Int64)
+@inline function im2col_p(Ao::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, m::Int64)
     A = zeros(Float32, size(Ao,1)+m-1, size(Ao,2))
     A[1:size(Ao,1),:] = Ao
     M,N = size(A)
@@ -169,68 +185,68 @@ end
     return B'
 end
 
-function dif_convolution(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float32})
-    lx = size(x,1)                      #Dlugosc obrazu
-    dx = zero(x)                        #Dx
-
-    size_diff = size(m,2)               #Liczba masek
-    rm = reverse(m, dims=2)
-    tmp_x = zeros(Float32,size(x,1),size_diff*size_diff)
-    gv = zeros(Float32,size(x,1),size_diff)
-    for i=1:size(dx,2)                 #Obrazy wyjściowe
-        #Zwężenie                       #obraz g,   maska
-        #@views dx[:,i] = sum(multi_convolution_fast!(tmp_x, g[:,1+(i-1)*size_diff:i*size_diff], rm), dims=2)
-        gv .= g[:,i:size(x,2):end]
-        @views dx[:,i] = sum(multi_convolution_fast!(tmp_x, gv, rm), dims=2)
-    end
-
-    tmp_x = zeros(Float32,size(x,1),size(x,2)*size(g,2))
-    multi_convolution_fast!(tmp_x,x,g)
+function dif_convolution(x::Array{Float32,3}, m::Matrix{Float32}, g::Array{Float32,3})
+    dx = zero(x)
     dm = zero(m)
-    for i=1:size_diff                 #liczba masek
-        t = @view(tmp_x[:, 1+(i-1)*size(x,2):i*size(x,2)])    
-        tt = sum(t,dims=2)
-        dm[:,i] = reverse(@view(tt[(lx-size(m,1) +1):lx,:]), dims=1)
+    for z=1:size(x,3)
+        #views
+        dxv = @view(dx[:,:,z])
+        gv = @view(g[:,:,z])
+        xv = @view(x[:,:,z])
+        dif_convolution!(dxv,dm,xv,m,gv)
     end
-    return tuple(dx,dm)
+    return (dx, dm)
 end
 
-function dif_convolution_fix(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float32})
-    dx = zero(x)                        #Dx
+function dif_convolution!(dx::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, dm::Matrix{Float32}, x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, m::Matrix{Float32}, g::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true})
+    mask_count = size(m,2)
 
-    size_diff = size(m,2)               #Liczba masek
-
-    tmp_x = zeros(Float32,size(x,1),size_diff*size(g,2))
+    #dx
+    tmp_x = zeros(Float32,size(x,1),mask_count*size(g,2))
     rg = reverse(g, dims=1)
     multi_convolution_fast!(tmp_x, rg, m)
     reverse!(tmp_x,dims=1)
-
-    for i=1:size(dx,2)                 #Obrazy wejściowe
-        @views dx[:,i] = sum(tmp_x[:,((i-1)*size_diff+1):(1+size(g,2)):end], dims=2)
+    for i=1:size(dx,2)
+        @views dx[:,i] = sum(tmp_x[:,((i-1)*mask_count+1):(1+size(g,2)):end], dims=2)
     end
 
+    #dm
     tmp_x = zeros(Float32,size(x,1),size(x,2)*size(g,2))
     multi_convolution_fast!(tmp_x,x,g)
+    for i=1:mask_count
+        tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
+        @views dm[:,i] .+= tt[1:size(m,1),:]
+    end
+
+    return nothing
+end
+
+function dif_convolution(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float32})
+    dx = zero(x)
     dm = zero(m)
-    for i=1:size_diff                 #liczba masek
-        tt = sum(tmp_x[:, i:(size(g,2)+size_diff):end],dims=2)
+    mask_count = size(m,2)
+
+    #dx
+    tmp_x = zeros(Float32,size(x,1),mask_count*size(g,2))
+    rg = reverse(g, dims=1)
+    multi_convolution_fast!(tmp_x, rg, m)
+    reverse!(tmp_x,dims=1)
+    for i=1:size(dx,2)
+        @views dx[:,i] = sum(tmp_x[:,((i-1)*mask_count+1):(1+size(g,2)):end], dims=2)
+    end
+
+    #dm
+    tmp_x = zeros(Float32,size(x,1),size(x,2)*size(g,2))
+    multi_convolution_fast!(tmp_x,x,g)
+    for i=1:mask_count
+        tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
         @views dm[:,i] = tt[1:size(m,1),:]
     end
+
     return tuple(dx,dm)
 end
 
 # Max Pool
-function m_pool(x::Matrix{Float32},mf::Matrix{Float32})
-    m = Int64(mf[1])
-    x_new = zeros(Float32,div(size(x,1),m),size(x,2))
-    for i=1:size(x_new,2)
-        for j=1:size(x_new,1)
-            a = argmax(x[j*m-m+1:j*m,i])
-            x_new[j,i] = x[j*m-m+a,i]
-        end
-    end
-    return x_new
-end
 
 function m_pool(x::Array{Float32,3},mf::Matrix{Float32})
     m = Int64(mf[1])
@@ -246,18 +262,6 @@ function m_pool(x::Array{Float32,3},mf::Matrix{Float32})
     return x_new
 end
 
-function dif_max_pool(x::Matrix{Float32},mf::Matrix{Float32}, g::Matrix{Float32})
-    m = Int64(mf[1])
-    x_new = zero(x)
-    for i=1:size(x_new,2)
-        for j=1:div.(size(x_new,1),m)
-            a = argmax(x[j*m-m+1:j*m, i])
-            x_new[a+(j-1)*m,i] = g[j,i]
-        end
-    end
-    return tuple(x_new, 1.0)
-end
-
 function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,3})
     m = Int64(mf[1])
     x_new = zero(x)
@@ -270,17 +274,6 @@ function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,
         end
     end
     return tuple(x_new, 1.0)
-end
-
-# m->mask size l->layers number
-function extend_input(x::Matrix{Float32}, m::Int64, l::Int64)
-    E = size(x,2)
-    if E%(m^l)!=0
-        E+=m^l-E%(m^l)
-    end
-    x_new = zeros(Float32,1,E)
-    x_new[1:length(x)] = x
-    return x_new
 end
 
 #CNN
