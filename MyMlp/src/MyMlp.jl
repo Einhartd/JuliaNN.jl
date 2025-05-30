@@ -179,35 +179,42 @@ end
 
 mutable struct ConvolutionBlock <: Layer
     masks::Variable
-    pool_fun::Function
-    pool_size::Constant
     act_fun::Function
     name::String
 end
 
-function ConvolutionBlock(mask_count::Int, mask_size::Int, size::Int;
+function ConvolutionBlock(mask_count::Int, mask_size::Int;
     weight_init = xavier_uniform,
-    pool_fun=max_pool,
     act_fun=relu,
     name="convolution")
 
     masks = Variable(weight_init((mask_size, mask_count)); name="$(name)_masks")
-    pool_size = Constant([Float32(size);;])
 
-    return ConvolutionBlock(masks, pool_fun, pool_size, act_fun, name)
+    return ConvolutionBlock(masks, act_fun, name)
 end
 
 function (c::ConvolutionBlock)(x::GraphNode)
     cl = conv(x,c.masks)
     cl.name = "$(c.name)_conv"
 
-    pl = c.pool_fun(cl,c.pool_size)
-    pl.name = "$(c.name)_pool"
+    return cl
+end
 
-    al = c.act_fun(pl)
-    al.name = "$(c.name)_active"
+mutable struct PoolingBlock <: Layer
+    name::String
+    pool_fun::Function
+    pool_size::Constant
+end
 
-    return al
+function PoolingBlock(size::Int;name="flatten",pool_fun=max_pool)
+    pool_size = Constant([Float32(size);;])
+    return PoolingBlock(name,pool_fun,pool_size)
+end
+
+function (p::PoolingBlock)(x::GraphNode)
+    pl = p.pool_fun(x,p.pool_size)
+    pl.name = f.name
+    return pl
 end
 
 mutable struct FlattenBlock <: Layer
