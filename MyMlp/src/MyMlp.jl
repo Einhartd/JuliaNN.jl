@@ -1,7 +1,7 @@
 module MyMlp
 export xavier_normal, xavier_uniform,
        xavier_normal!, xavier_uniform!,
-       Dense, ConvolutionBlock, FlattenBlock, Chain,
+       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Chain,
        Adam, AdamState,
        setup_optimizer, step!,
        build_graph!,
@@ -255,7 +255,7 @@ end
 
 function (p::PoolingBlock)(x::GraphNode)
     pl = p.pool_fun(x,p.pool_size)
-    pl.name = f.name
+    pl.name = p.name
     return pl
 end
 
@@ -274,6 +274,10 @@ function (f::FlattenBlock)(x::GraphNode)
 end
 
 function collect_model_parameters(::FlattenBlock)
+    return []
+end
+
+function collect_model_parameters(::PoolingBlock)
     return []
 end
 
