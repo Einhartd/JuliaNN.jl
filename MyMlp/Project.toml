@@ -15,6 +15,7 @@ MLDatasets = "eb30cadb-4394-5ae3-aed4-317e484a6458"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
@@ -29,4 +30,5 @@ MLDatasets = "0.7.18"
 Plots = "1.40.13"
 Random = "1.11.0"
 Statistics = "1.11.1"
+TensorOperations = "4.1.1"
 UUIDs = "1.11.0"
