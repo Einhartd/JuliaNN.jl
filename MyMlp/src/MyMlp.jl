@@ -85,31 +85,25 @@ end
 # --- Warstwa Embedding ---
 mutable struct Embedding <: Layer
     W::Variable # Węzeł GraphNode przechowujący macierz embeddingów
-    padding_idx::Union{Int, Nothing} # Indeks paddingu, jeśli jest zdefiniowany
     name::String
 end
 
 function Embedding(vocab_size::Int, embedding_dim::Int;
                    weight_init = (dims) -> MyReverseDiff.xavier_uniform(dims),
-                   padding_idx::Union{Int, Nothing} = nothing,
                    name="embedding_layer")
 
     W_val = weight_init((embedding_dim, vocab_size))
     W = MyReverseDiff.Variable(W_val; name="$(name)_W")
 
-    return Embedding(W, padding_idx, name)
+    return Embedding(W, name)
 end
 
 function Embedding(initial_weights::Matrix{Float32};
-                   padding_idx::Union{Int, Nothing} = nothing,
                    name="embedding_layer")
-
-    # Wymiary vocab_size i embedding_dim są inferowane z podanej macierzy
-    embedding_dim, vocab_size = size(initial_weights) 
     
     W = MyReverseDiff.Variable(initial_weights; name="$(name)_W")
 
-    return Embedding(W, padding_idx, name)
+    return Embedding(W, name)
 end
 
 function (e::Embedding)(x::MyReverseDiff.GraphNode)
@@ -186,8 +180,14 @@ function collect_model_parameters(model::Chain)
     return all_params
 end
 
+#   Funkcje pomocnicze do zbierania parametrów z warstw
+
 function collect_model_parameters(layer::Dense)
     return [(layer.W.name, layer.W), (layer.b.name, layer.b)]
+end
+
+function collect_model_parameters(layer::Embedding)
+    return [(layer.W.name, layer.W)]
 end
 
 function step!(optimizer_state::AdamState)
