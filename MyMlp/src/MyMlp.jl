@@ -1,7 +1,7 @@
 module MyMlp
 export xavier_normal, xavier_uniform,
        xavier_normal!, xavier_uniform!,
-       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Chain,
+       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Dense3D, Chain,
        Adam, AdamState,
        setup_optimizer, step!,
        build_graph!,
@@ -77,6 +77,42 @@ function (d::Dense)(x::GraphNode)
              return d.activation(linear_output, name="$(d.name)_$(string(nameof(d.activation)))")
         catch
              return d.activation(linear_output)
+        end
+    end
+end
+
+mutable struct Dense3D <: Layer
+    W::Variable
+    b::Variable
+    activation
+    name::String
+end
+
+function Dense3D(in_features::Int, out_features::Int, activation=identity; 
+    weight_init = xavier_uniform,
+    bias_init = (dims) -> zeros(Float32, dims),
+    name="dense")
+
+    W = Variable(weight_init((out_features, in_features)); name="$(name)_w")
+
+    b = Variable(bias_init((out_features, 1)); name="$(name)_b")
+
+    return Dense3D(W, b, activation, name)
+end
+
+function (d::Dense3D)(x::GraphNode)
+    ma = dense3D(x,d.W,d.b)
+    
+    if d.activation == relu
+        return relu(ma, name="$(d.name)_relu")
+    elseif d.activation == σ
+        return σ(ma, name="$(d.name)_sigmoid")
+    else
+        #   Użyj domyślnej nazwy
+        try
+             return d.activation(ma, name="$(d.name)_$(string(nameof(d.activation)))")
+        catch
+             return d.activation(ma)
         end
     end
 end
@@ -283,6 +319,10 @@ end
 
 function collect_model_parameters(layer::ConvolutionBlock)
     return [(layer.masks.name, layer.masks)]
+end
+
+function collect_model_parameters(layer::Dense3D)
+    return [(layer.W.name, layer.W), (layer.b.name, layer.b)]
 end
 
 end # module MyMlp

@@ -1,6 +1,6 @@
 module MyReverseDiff
 export topological_sort, forward!, backward!, reset!, update!, compute!,
-       binarycrossentropy, relu, σ, *, +, conv, max_pool, flatten, AdamState, setup_optimizer,
+       binarycrossentropy, dense3D, relu, σ, *, +, conv, max_pool, flatten, AdamState, setup_optimizer,
        show, summary
 export Constant, Variable, ScalarOperator, BroadcastedOperator, GraphNode, Operator
 
@@ -276,6 +276,37 @@ function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,
     return tuple(x_new, 1.0)
 end
 
+#Multiplying and Adding with Tensors
+function dense3Dfun(x::Array{Float32,3}, A::Array{Float32,2}, b::Array{Float32,2})
+    x_new = zeros(Float32, size(A, 1), size(x, 2), size(x, 3))
+    #Multiplying
+    for z=1:size(x, 3)
+        @views x_new[:,:,z] = A * x[:,:,z]
+    end
+    #Adding
+    for z=1:size(x, 3)
+        @views x_new[:,:,z] = x_new[:,:,z] .+ b
+    end
+    return x_new
+end
+
+function dif_dense3Dfun(x::Array{Float32,3}, A::Array{Float32,2}, b::Array{Float32,2}, g::Array{Float32,3})
+    db = zero(b)
+    dx = zero(x)
+    dA = zero(A)
+    
+    #Adding
+    db .= sum(sum(g, dims=2), dims=3)
+
+    #Multiplying    
+    for z=1:size(g,3)
+        @views dA .+= g[:,:,z] * x[:,:,z]'
+        @views dx[:,:,z] .= A' * g[:,:,z]
+    end
+    
+    return (dx,dA,db)
+end
+
 #CNN
 conv(x::GraphNode, m::GraphNode) = BroadcastedOperator(conv,x,m)
 forward(::BroadcastedOperator{typeof(conv)}, x, m) = return multi_convolution(x,m)
@@ -287,8 +318,11 @@ backward(::BroadcastedOperator{typeof(max_pool)}, x, m, g) = return dif_max_pool
 
 flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
 forward(::BroadcastedOperator{typeof(flatten)}, x) = return reshape(x,size(x,1)*size(x,2),size(x,3))
-
 backward(::BroadcastedOperator{typeof(flatten)}, x, g) = return reshape(g,size(x))
+
+dense3D(x::GraphNode, A::GraphNode,b::GraphNode) = BroadcastedOperator(dense3D,x,A,b)
+forward(::BroadcastedOperator{typeof(dense3D)},x,A,b) = return dense3Dfun(x,A,b)
+backward(::BroadcastedOperator{typeof(dense3D)},x,A,b,g) = return dif_dense3Dfun(x,A,b,g)
 
 reset!(node::Constant) = nothing
 reset!(node::Variable) = node.gradient = zeros(Float32, size(node.output))
@@ -339,8 +373,6 @@ function compute!(node::Operator)
         end
     end
 end
-
-
 
 function forward!(order::Vector)
     #   Iteruje przez każdy węzeł w order.

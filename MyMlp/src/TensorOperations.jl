@@ -34,6 +34,46 @@ function Base.:*(tensor::Array{T,3}, matrix::Array{T,2}) where T
     return result
 end
 
+function Base.:+(tensor::Array{T,3}, matrix::Array{T,2}) where T
+    # Sprawdzenie zgodności wymiarów dla mnożenia macierzowego
+    if size(tensor, 1) != size(matrix, 1) || size(tensor, 2) != size(matrix, 2)
+        throw(DimensionMismatch("Dla Dodawania macierzowego tensor[:,:,k] + matrix: " *
+                               "size(tensor,2)=$(size(tensor,2)) musi być równe " *
+                               "size(matrix,2)=$(size(matrix,2)) oraz" * 
+                               "size(tensor,1)=$(size(tensor,1)) musi być równe " *
+                               "size(matrix,1)=$(size(matrix,1))"))
+    end
+    
+    # Wynik będzie miał wymiary (size(tensor,1), size(matrix,2), size(tensor,3))
+    result = zeros(T, size(tensor))
+    
+    # Mnożenie macierzowe każdej warstwy tensora przez macierz
+    for k in 1:size(tensor, 3)
+        result[:, :, k] = tensor[:, :, k] + matrix
+    end
+    
+    return result
+end
+
+function Base.:*(matrix::Array{T,2}, tensor::Array{T,3}) where T
+    # Sprawdzenie zgodności wymiarów dla mnożenia macierzowego
+    if size(tensor, 1) != size(matrix, 2)
+        throw(DimensionMismatch("Dla mnożenia macierzowego matrix * tensor[:,:,k]: " *
+                               "size(tensor,2)=$(size(tensor,2)) musi być równe " *
+                               "size(matrix,1)=$(size(matrix,1))"))
+    end
+    
+    # Wynik będzie miał wymiary (size(tensor,1), size(matrix,2), size(tensor,3))
+    result = zeros(T, size(matrix, 1), size(tensor, 2), size(tensor, 3))
+    
+    # Mnożenie macierzowe każdej warstwy tensora przez macierz
+    for k in 1:size(tensor, 3)
+        result[:, :, k] = matrix * tensor[:, :, k]
+    end
+    
+    return result
+end
+
 
 function Base.:*(tensor::Array{T,3}, vector::Vector{T}) where T
     # Sprawdzenie zgodności wymiarów
