@@ -17,7 +17,7 @@ include("../MyEmbedding.jl")
 include("../MyMlp.jl")
 
 using .MyReverseDiff
-using .MyEmbedding
+using .MyEmbedding: embedding
 using .MyMlp
 using JLD2
 using Printf
@@ -41,7 +41,7 @@ embeddings = embedding(B, A; name = "embedding")
 order = topological_sort(embeddings)
 
 
-embedding_layer = MyMlp.Embedding(b; name="my_embedding_layer", padding_idx=4)
+embedding_layer = MyMlp.Embedding(b; name="my_embedding_layer")
 
 forward!(order)
 backward!(order)

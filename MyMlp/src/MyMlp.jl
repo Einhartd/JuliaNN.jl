@@ -125,7 +125,7 @@ mutable struct Embedding <: Layer
 end
 
 function Embedding(vocab_size::Int, embedding_dim::Int;
-                   weight_init = (dims) -> MyReverseDiff.xavier_uniform(dims),
+                   weight_init = (dims) -> xavier_uniform(dims),
                    name="embedding_layer")
 
     W_val = weight_init((embedding_dim, vocab_size))
