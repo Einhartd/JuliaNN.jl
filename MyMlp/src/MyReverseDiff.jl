@@ -132,36 +132,67 @@ function multi_convolution_fast!(x_new::Matrix{Float32},x::Matrix{Float32},m::Ma
     return x_new
 end
 
-function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},m::Matrix{Float32})
+function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    m::Matrix{Float32})
     c = size(m,1)
     x_new .= reshape(im2col_p(x,c)*m,:,size(m,2)*size(x,2))
     return x_new
 end
 
-function multi_convolution_fast!(x_new::Matrix{Float32},x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},m::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true})
+function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    m::Matrix{Float32},
+    Ab::Matrix{Float32},
+    Bb::Array{eltype(Matrix{Float32}),2},
+    enum_indx::Base.Iterators.Enumerate{Matrix{Int64}}
+    )
+    c = size(m,1)
+    x_new .= reshape(im2col_p!(x,c,Ab,Bb,enum_indx)*m,:,size(m,2)*size(x,2))
+    return x_new
+end
+
+function multi_convolution_fast!(
+    x_new::Matrix{Float32},
+    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    m::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}
+    )
     c = size(m,1)
     x_new .= reshape(im2col_p(x,c)*m,:,size(m,2)*size(x,2))
     return x_new
 end
 
-function multi_convolution(x::Matrix{Float32},m::Matrix{Float32})
-    y = zeros(Float32,size(x,1),size(x,2)*size(m,2))
-    return multi_convolution_fast!(y,x,m)
+function multi_convolution_fast!(
+    x_new::Matrix{Float32},
+    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    m::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}
+    )
+    c = size(m,1)
+    x_new .= reshape(im2col_p(x,c)*m,:,size(m,2)*size(x,2))
+    return x_new
 end
+
+# function multi_convolution(x::Matrix{Float32},m::Matrix{Float32})
+#     y = zeros(Float32,size(x,1),size(x,2)*size(m,2))
+#     return multi_convolution_fast!(y,x,m)
+# end
 
 function multi_convolution(x::Array{Float32,3},m::Matrix{Float32})
     y = zeros(Float32,size(x,1),size(x,2)*size(m,2),size(x,3))
+    Ap = zeros(Float32, size(x,1)+size(m,1)-1, size(x,2)) #im2col buffor
+    Bp =  Array{eltype(Matrix{Float32})}(undef, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2))) #im2col buffor
+    enum_indx = enumerate(reshape(1:size(Ap,1)*size(Ap,2), size(Ap,1),size(Ap,2))[1:size(Ap,1)-size(m,1)+1,1:size(Ap,2)])
     for z=1:size(x,3)
         yv = @view(y[:,:,z])
         xv = @view(x[:,:,z])
-        multi_convolution_fast!(yv,xv,m)
+        multi_convolution_fast!(yv,xv,m,Ap,Bp,enum_indx)
     end
     return y
 end
 
 @inline function im2col_p(Ao::Matrix{Float32}, m::Int64)
     A = zeros(Float32, size(Ao,1)+m-1, size(Ao,2))
-    A[1:size(Ao,1),:] = Ao
+    A[1:size(Ao,1),:] .= Ao
     M,N = size(A)
     B = Array{eltype(Matrix{Float32})}(undef, m,
     (M-m+1)*(N))
@@ -174,7 +205,7 @@ end
 
 @inline function im2col_p(Ao::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, m::Int64)
     A = zeros(Float32, size(Ao,1)+m-1, size(Ao,2))
-    A[1:size(Ao,1),:] = Ao
+    A[1:size(Ao,1),:] .= Ao
     M,N = size(A)
     B = Array{eltype(Matrix{Float32})}(undef, m,
     (M-m+1)*(N))
@@ -185,25 +216,48 @@ end
     return B'
 end
 
+@inline function im2col_p!(
+    Ao::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
+    m::Int64,
+    A::Matrix{Float32},
+    B::Array{eltype(Matrix{Float32}),2},
+    enum_indx::Base.Iterators.Enumerate{Matrix{Int64}}
+    )
+    @views A[1:size(Ao,1),:] .= Ao
+
+    for (i,value) in enum_indx
+        @views B[(i-1)*m+1:(i-1)*m+m] = A[value:value+m-1]
+    end
+    return B'
+end
+
 function dif_convolution(x::Array{Float32,3}, m::Matrix{Float32}, g::Array{Float32,3})
     dx = zero(x)
     dm = zero(m)
+    #Buffors and allocs
+    rg = @views zero(g[:,:,1])
     for z=1:size(x,3)
         #views
         dxv = @view(dx[:,:,z])
         gv = @view(g[:,:,z])
         xv = @view(x[:,:,z])
-        dif_convolution!(dxv,dm,xv,m,gv)
+        rg .= reverse(gv, dims=1)
+        dif_convolution!(dxv,dm,xv,m,gv,rg)
     end
     return (dx, dm)
 end
 
-function dif_convolution!(dx::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, dm::Matrix{Float32}, x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, m::Matrix{Float32}, g::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true})
+function dif_convolution!(
+    dx::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
+    dm::Matrix{Float32}, 
+    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
+    m::Matrix{Float32}, 
+    g::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
+    rg::Matrix{Float32})
     mask_count = size(m,2)
 
     #dx
     tmp_x = zeros(Float32,size(x,1),mask_count*size(g,2))
-    rg = reverse(g, dims=1)
     multi_convolution_fast!(tmp_x, rg, m)
     reverse!(tmp_x,dims=1)
     for i=1:size(dx,2)
@@ -214,7 +268,7 @@ function dif_convolution!(dx::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base
     tmp_x = zeros(Float32,size(x,1),size(x,2)*size(g,2))
     multi_convolution_fast!(tmp_x,x,g)
     for i=1:mask_count
-        tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
+        @views tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
         @views dm[:,i] .+= tt[1:size(m,1),:]
     end
 
@@ -239,7 +293,7 @@ function dif_convolution(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float
     tmp_x = zeros(Float32,size(x,1),size(x,2)*size(g,2))
     multi_convolution_fast!(tmp_x,x,g)
     for i=1:mask_count
-        tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
+        @views tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
         @views dm[:,i] = tt[1:size(m,1),:]
     end
 
@@ -254,7 +308,7 @@ function m_pool(x::Array{Float32,3},mf::Matrix{Float32})
     for z=1:size(x_new,3)
         for i=1:size(x_new,2)
             for j=1:size(x_new,1)
-                a = argmax(x[j*m-m+1:j*m,i,z])
+                @views a = argmax(x[j*m-m+1:j*m,i,z])
                 x_new[j,i,z] = x[j*m-m+a,i,z]
             end
         end
@@ -268,7 +322,7 @@ function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,
     for z=1:size(x_new,3)
         for i=1:size(x_new,2)
             for j=1:div.(size(x_new,1),m)
-                a = argmax(x[j*m-m+1:j*m, i,z])
+                @views a = argmax(x[j*m-m+1:j*m, i,z])
                 x_new[a+(j-1)*m,i,z] = g[j,i,z]
             end
         end
