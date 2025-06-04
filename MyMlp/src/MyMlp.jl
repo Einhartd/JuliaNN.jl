@@ -266,7 +266,7 @@ function ConvolutionBlock(mask_count::Int, mask_size::Int;
     act_fun=relu,
     name="convolution")
 
-    masks = Variable(weight_init((mask_size, mask_count)); name="$(name)_masks")
+    masks = Variable(weight_init((mask_size, mask_count)); name="$(name)_masks_w")
 
     return ConvolutionBlock(masks, act_fun, name)
 end

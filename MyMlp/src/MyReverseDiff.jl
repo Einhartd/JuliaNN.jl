@@ -148,7 +148,7 @@ function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, 
     enum_indx::Base.Iterators.Enumerate{Matrix{Int64}}
     )
     c = size(m,1)
-    x_new .= reshape(im2col_p!(x,c,Ab,Bb,enum_indx)*m,:,size(m,2)*size(x,2))
+    @views x_new .= reshape(im2col_p!(x,c,Ab,Bb,enum_indx)*m,:,size(m,2)*size(x,2))
     return x_new
 end
 
@@ -180,7 +180,8 @@ end
 function multi_convolution(x::Array{Float32,3},m::Matrix{Float32})
     y = zeros(Float32,size(x,1),size(x,2)*size(m,2),size(x,3))
     Ap = zeros(Float32, size(x,1)+size(m,1)-1, size(x,2)) #im2col buffor
-    Bp =  Array{eltype(Matrix{Float32})}(undef, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2))) #im2col buffor
+    #Bp =  Array{eltype(Matrix{Float32})}(undef, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2))) #im2col buffor
+    Bp = zeros(Float32, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2)))
     enum_indx = enumerate(reshape(1:size(Ap,1)*size(Ap,2), size(Ap,1),size(Ap,2))[1:size(Ap,1)-size(m,1)+1,1:size(Ap,2)])
     for z=1:size(x,3)
         yv = @view(y[:,:,z])
@@ -216,7 +217,7 @@ end
     return B'
 end
 
-@inline function im2col_p!(
+function im2col_p!(
     Ao::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
     m::Int64,
     A::Matrix{Float32},
@@ -226,7 +227,7 @@ end
     @views A[1:size(Ao,1),:] .= Ao
 
     for (i,value) in enum_indx
-        @views B[(i-1)*m+1:(i-1)*m+m] = A[value:value+m-1]
+        B[(i-1)*m+1:i*m] = @view(A[value:value+m-1])
     end
     return B'
 end
@@ -327,7 +328,7 @@ function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,
             end
         end
     end
-    return tuple(x_new, 1.0)
+    return tuple(x_new, 1.0f0)
 end
 
 #Multiplying and Adding with Tensors
@@ -372,7 +373,9 @@ backward(::BroadcastedOperator{typeof(max_pool)}, x, m, g) = return dif_max_pool
 
 flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
 forward(::BroadcastedOperator{typeof(flatten)}, x) = return reshape(x,size(x,1)*size(x,2),size(x,3))
-backward(::BroadcastedOperator{typeof(flatten)}, x, g) = return reshape(g,size(x))
+backward(::BroadcastedOperator{typeof(flatten)}, x, g) = begin
+    return (reshape(g,size(x,1),size(x,2),size(x,3)),)
+end
 
 dense3D(x::GraphNode, A::GraphNode,b::GraphNode) = BroadcastedOperator(dense3D,x,A,b)
 forward(::BroadcastedOperator{typeof(dense3D)},x,A,b) = return dense3Dfun(x,A,b)
