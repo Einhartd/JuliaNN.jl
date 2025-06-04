@@ -172,21 +172,13 @@ function multi_convolution_fast!(
     return x_new
 end
 
-# function multi_convolution(x::Matrix{Float32},m::Matrix{Float32})
-#     y = zeros(Float32,size(x,1),size(x,2)*size(m,2))
-#     return multi_convolution_fast!(y,x,m)
-# end
-
 function multi_convolution(x::Array{Float32,3},m::Matrix{Float32})
     y = zeros(Float32,size(x,1),size(x,2)*size(m,2),size(x,3))
     Ap = zeros(Float32, size(x,1)+size(m,1)-1, size(x,2)) #im2col buffor
-    #Bp =  Array{eltype(Matrix{Float32})}(undef, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2))) #im2col buffor
     Bp = zeros(Float32, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2)))
     enum_indx = enumerate(reshape(1:size(Ap,1)*size(Ap,2), size(Ap,1),size(Ap,2))[1:size(Ap,1)-size(m,1)+1,1:size(Ap,2)])
     for z=1:size(x,3)
-        yv = @view(y[:,:,z])
-        xv = @view(x[:,:,z])
-        multi_convolution_fast!(yv,xv,m,Ap,Bp,enum_indx)
+        @views multi_convolution_fast!(y[:,:,z],x[:,:,z],m,Ap,Bp,enum_indx)
     end
     return y
 end
@@ -199,7 +191,9 @@ end
     (M-m+1)*(N))
     indx = reshape(1:M*N, M,N)[1:M-m+1,1:N]
     for (i,value) in enumerate(indx)
-        @views B[(i-1)*m+1:(i-1)m+m] = A[value:value+m-1]
+        for j=1:(m-1)
+            B[(i-1)*m+j] = A[value+j]
+        end
     end
     return B'
 end
@@ -212,7 +206,9 @@ end
     (M-m+1)*(N))
     indx = reshape(1:M*N, M,N)[1:M-m+1,1:N]
     for (i,value) in enumerate(indx)
-        @views B[(i-1)*m+1:(i-1)m+m] = A[value:value+m-1]
+        for j=1:(m-1)
+            B[(i-1)*m+j] = A[value+j]
+        end
     end
     return B'
 end
@@ -227,7 +223,9 @@ function im2col_p!(
     @views A[1:size(Ao,1),:] .= Ao
 
     for (i,value) in enum_indx
-        B[(i-1)*m+1:i*m] = @view(A[value:value+m-1])
+        for j=1:(m-1)
+            B[(i-1)*m+j] = A[value+j]
+        end
     end
     return B'
 end
