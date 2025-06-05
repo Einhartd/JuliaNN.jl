@@ -290,8 +290,8 @@ function PoolingBlock(size::Int;name="flatten",pool_fun=max_pool)
 end
 
 function (p::PoolingBlock)(x::GraphNode)
-    pl = p.pool_fun(x,p.pool_size)
-    pl.name = p.name
+    pl = max_pool(x,p.pool_size)
+    pl.name = "$(p.name)_pool"
     return pl
 end
 
