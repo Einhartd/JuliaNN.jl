@@ -91,7 +91,7 @@ end
 function Dense3D(in_features::Int, out_features::Int, activation=identity; 
     weight_init = xavier_uniform,
     bias_init = (dims) -> zeros(Float32, dims),
-    name="dense")
+    name="dense3d")
 
     W = Variable(weight_init((out_features, in_features)); name="$(name)_w")
 
