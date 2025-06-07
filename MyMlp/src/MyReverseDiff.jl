@@ -1,6 +1,6 @@
 module MyReverseDiff
 export topological_sort, forward!, backward!, reset!, update!, compute!,
-       binarycrossentropy, dense3D, relu, σ, *, +, conv, max_pool, flatten, AdamState, setup_optimizer,
+       binarycrossentropy, dense3D, relu, transpose, σ, *, +, conv, max_pool, flatten, AdamState, setup_optimizer,
        show, summary
 export Constant, Variable, ScalarOperator, BroadcastedOperator, GraphNode, Operator
 
@@ -108,6 +108,12 @@ backward(node::BroadcastedOperator{typeof(σ)}, x, g) = begin
     grad_wrt_x = g .* local_derivative
     return (grad_wrt_x, )
 end
+
+transpose(x::GraphNode; name="Transposition") = BroadcastedOperator(transpose, x, name=name)
+forward(::BroadcastedOperator{typeof(transpose)},x::Matrix{Float32}) = return permutedims(x, (2,1))
+forward(::BroadcastedOperator{typeof(transpose)},x::Array{Float32,3}) = return permutedims(x, (2,1,3))
+backward(::BroadcastedOperator{typeof(transpose)},x,g::Matrix{Float32}) = return permutedims(g, (2,1))
+backward(::BroadcastedOperator{typeof(transpose)},x,g::Array{Float32,3}) = return permutedims(g, (2,1,3))
 
 function binary_cross_entropy_loss_impl(ŷ, y_true; epsilon=1e-10)
     ŷ_clamped = clamp.(ŷ, epsilon, 1.0f0 - epsilon)
