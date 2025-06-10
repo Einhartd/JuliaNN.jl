@@ -1,7 +1,7 @@
 module MyMlp
 export xavier_normal, xavier_uniform,
        xavier_normal!, xavier_uniform!,
-       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Dense3D, Chain,
+       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Dense3D, Chain, TransposeBlock,
        Adam, AdamState,
        setup_optimizer, step!,
        build_graph!,
@@ -117,6 +117,19 @@ function (d::Dense3D)(x::GraphNode)
     end
 end
 
+mutable struct TransposeBlock <:Layer
+    name::String
+end
+
+function TransposeBlock(;name="transposition")
+    return TransposeBlock(name)
+end
+
+function (t::TransposeBlock)(x::GraphNode)
+    tr = MyReverseDiff.transpose(x)
+    tr.name = t.name
+    return tr
+end
 
 # --- Warstwa Embedding ---
 mutable struct Embedding <: Layer
@@ -323,6 +336,10 @@ end
 
 function collect_model_parameters(layer::Dense3D)
     return [(layer.W.name, layer.W), (layer.b.name, layer.b)]
+end
+
+function collect_model_parameters(::TransposeBlock)
+    return []
 end
 
 end # module MyMlp
