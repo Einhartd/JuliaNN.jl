@@ -132,8 +132,7 @@ backward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_v
     epsilon = 1e-10
     ŷ_clamped_for_grad = clamp.(ŷ_value, epsilon, 1.0f0 - epsilon)
     local_grad_per_sample = (ŷ_clamped_for_grad .- y_value) ./ (ŷ_clamped_for_grad .* (1.0f0 .- ŷ_clamped_for_grad))
-    batch_size = size(y_value, 2)
-    grad_wrt_ŷ = local_grad_per_sample ./ batch_size
+    grad_wrt_ŷ = local_grad_per_sample .* g
     return (grad_wrt_ŷ, zeros(Float32, size(y_value)))
 end
 
