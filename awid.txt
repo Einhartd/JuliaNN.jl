@@ -1,7 +1,4 @@
 Do sprawdzenia:
-- Flatten
 - Pooling
-- Dense3D
-- Embedding - zwraca to samo co Flux!
 
 Jeśli nic nie pomoże -> Konwolucja 1:1 jak we Flux

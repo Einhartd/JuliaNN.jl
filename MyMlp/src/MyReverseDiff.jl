@@ -440,9 +440,6 @@ function reset!(node::Operator)
     end
 end
 
-
-
-
 compute!(node::Constant) = nothing
 compute!(node::Variable) = nothing
 

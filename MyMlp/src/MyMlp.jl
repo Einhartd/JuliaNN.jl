@@ -200,7 +200,7 @@ struct Adam <: AbstractOptimizer
     ε :: Float32    # Epsilon for numerical stability
 end
 
-Adam() = Adam(0.001f0, 0.9f0, 0.999f0, 1e-8)
+Adam(;a=0.001f0) = Adam(a, 0.9f0, 0.999f0, 1e-8)
 
 mutable struct AdamState
     hyperparams :: Adam # Przechowuje konfigurację optymalizatora
