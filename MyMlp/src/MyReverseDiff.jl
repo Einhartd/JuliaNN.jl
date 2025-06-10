@@ -280,6 +280,10 @@ function dif_convolution(x::Array{Float32,3}, m::Matrix{Float32}, g::Array{Float
         fill!(tmp_mul_dx,0.0f0)
         dif_convolution!(dxv,dm,xv,m,gv,rg,tmp_dx,tmp_dm,tmp_mul_dx,tmp_mul_dm)
     end
+    # bach mean
+    z = size(x,3)
+    dm ./= z
+
     return (dx, dm)
 end
 
@@ -399,6 +403,11 @@ function dif_dense3Dfun(x::Array{Float32,3}, A::Array{Float32,2}, b::Array{Float
         @views dx[:,:,z] .= A' * g[:,:,z]
     end
     
+    # bach mean
+    z = size(x,3)
+    db ./= z
+    dA ./= z 
+
     return (dx,dA,db)
 end
 
