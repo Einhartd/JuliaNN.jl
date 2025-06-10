@@ -404,8 +404,8 @@ function dif_dense3Dfun(x::Array{Float32,3}, A::Array{Float32,2}, b::Array{Float
     
     # bach mean
     z = size(x,3)
-    db ./= z
-    dA ./= z 
+    #db ./= z
+    #dA ./= z 
 
     return (dx,dA,db)
 end

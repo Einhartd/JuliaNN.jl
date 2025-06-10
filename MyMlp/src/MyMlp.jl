@@ -297,7 +297,7 @@ mutable struct PoolingBlock <: Layer
     pool_size::Constant
 end
 
-function PoolingBlock(size::Int;name="flatten",pool_fun=max_pool)
+function PoolingBlock(size::Int;name="pooling",pool_fun=max_pool)
     pool_size = Constant([Float32(size);;])
     return PoolingBlock(name,pool_fun,pool_size)
 end
