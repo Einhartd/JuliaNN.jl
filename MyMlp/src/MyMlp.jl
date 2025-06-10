@@ -247,11 +247,11 @@ function step!(optimizer_state::AdamState)
     for (name, var) in optimizer_state.parameters
         g = var.gradient
 
-        optimizer_state.m[name] = config.β1 * optimizer_state.m[name] + (1 - config.β1) * g
-        optimizer_state.v[name] = config.β2 * optimizer_state.v[name] + (1 - config.β2) * (g .^ 2)
+        optimizer_state.m[name] = config.β1 * optimizer_state.m[name] + (1.0f0 - config.β1) * g
+        optimizer_state.v[name] = config.β2 * optimizer_state.v[name] + (1.0f0 - config.β2) * (g .* g)
 
-        m_corrected = optimizer_state.m[name] / (1 - config.β1 ^ optimizer_state.t)
-        v_corrected = optimizer_state.v[name] / (1 - config.β2 ^ optimizer_state.t)
+        m_corrected = optimizer_state.m[name] ./ (1.0f0 - config.β1 ^ optimizer_state.t)
+        v_corrected = optimizer_state.v[name] ./ (1.0f0 - config.β2 ^ optimizer_state.t)
 
         var.output .-= config.α .* m_corrected ./ (sqrt.(v_corrected) .+ config.ε)
     end
