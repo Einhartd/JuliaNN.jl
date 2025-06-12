@@ -92,10 +92,17 @@ backward(::BroadcastedOperator{typeof(relu)}, x, g) = tuple(g .* (x .> 0.0f0))
 
 # add operation (for bias)
 +(x::GraphNode, y::GraphNode; name="sum") = BroadcastedOperator(+, x, y, name=name)
-forward(::BroadcastedOperator{typeof(+)}, x, y) = return x .+ y
-backward(::BroadcastedOperator{typeof(+)}, x, y, g) = begin
+forward(::BroadcastedOperator{typeof(+)}, x, y) = begin
+    return x .+ y
+end
+backward(::BroadcastedOperator{typeof(+)}, x, y, g::Array{Float32,2}) = begin
     grad_wrt_x = g
     grad_wrt_y = sum(g, dims=2)
+    return (grad_wrt_x, grad_wrt_y)
+end
+backward(::BroadcastedOperator{typeof(+)}, x, y, g::Array{Float32,3}) = begin
+    grad_wrt_x = g
+    grad_wrt_y = sum(sum(g, dims=1),dims=3)
     return (grad_wrt_x, grad_wrt_y)
 end
 
@@ -136,211 +143,49 @@ backward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_v
     return (grad_wrt_ŷ, zeros(Float32, size(y_value)))
 end
 
-# Convolution
+@inline function im2col(x, k)
+    steps = size(x,1) - k + 1
+    B = Array{Float32, 3}(undef, steps, size(x,2)*k ,size(x,3))
+    for i in 1:steps
+        @views B[i, :, :] = reshape(x[i:(i + k - 1), :, :], 1, :, size(x,3)) 
+    end
+    return B
+end
 
-function multi_convolution_fast!(x_new::Matrix{Float32},x::Matrix{Float32},m::Matrix{Float32},mul_buff::Matrix{Float32})
-    c = size(m,1)
-    mul!(mul_buff,im2col_p(x,c),m)
-    x_new .= reshape(mul_buff,:,size(m,2)*size(x,2))
+function convolution(x::Array{Float32,3},m::Array{Float32,3})
+    x_new = Array{Float32, 3}(undef, size(x,1) - size(m,1) + 1, (size(x,2) - size(m,2) + 1)*size(m,3), size(x,3))
+    kernel = reshape(m, :, size(m,3))
+    data = im2col(x, size(m,1))
+    for i in 1:size(x,3)
+        @views x_new[:,:,i] .= data[:,:,i] * kernel
+    end
     return x_new
 end
 
-function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    m::Matrix{Float32},
-    mul_buff::Matrix{Float32})
-    c = size(m,1)
-    mul!(mul_buff,im2col_p(x,c),m)
-    x_new .= reshape(mul_buff,:,size(m,2)*size(x,2))
-    return x_new
-end
+function dif_convolution(x::Array{Float32,3}, m::Array{Float32,3}, g::Array{Float32,3})
+    dx = zeros(Float32, size(x))
+    dm = zeros(Float32, size(m))
+    
+    x_cols = im2col(x, size(m,1))
 
-function multi_convolution_fast!(x_new::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    m::Matrix{Float32},
-    Ab::Matrix{Float32},
-    Bb::Array{eltype(Matrix{Float32}),2},
-    enum_indx::Base.Iterators.Enumerate{Matrix{Int64}},
-    mul_buff::Matrix{Float32}
-    )
-    c = size(m,1)
-    mul!(mul_buff,im2col_p!(x,c,Ab,Bb,enum_indx),m)
-    x_new .= reshape(mul_buff,:,size(m,2)*size(x,2))
-
-    return x_new
-end
-
-function multi_convolution_fast!(
-    x_new::Matrix{Float32},
-    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    m::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    mul_buff::Matrix{Float32}
-    )
-    c = size(m,1)
-    mul!(mul_buff,im2col_p(x,c),m)
-    x_new .= reshape(mul_buff,:,size(m,2)*size(x,2))
-    return x_new
-end
-
-function multi_convolution_fast!(
-    x_new::Matrix{Float32},
-    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    m::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    mul_buff::Matrix{Float32}
-    )
-    c = size(m,1)
-    mul!(mul_buff,im2col_p(x,c),m)
-    x_new .= reshape(mul_buff,:,size(m,2)*size(x,2))
-    return x_new
-end
-
-function multi_convolution(x::Array{Float32,3},m::Matrix{Float32})
-    y = zeros(Float32,size(x,1),size(x,2)*size(m,2),size(x,3))
-    Ap = zeros(Float32, size(x,1)+size(m,1)-1, size(x,2)) #im2col buffor
-    Bp =  Array{eltype(Matrix{Float32})}(undef, size(m,1), (size(Ap,1)-size(m,1)+1)*(size(Ap,2))) #im2col buffor
-    enum_indx = enumerate(reshape(1:size(Ap,1)*size(Ap,2), size(Ap,1),size(Ap,2))[1:size(Ap,1)-size(m,1)+1,1:size(Ap,2)])
-    mul_buff = zeros(Float32, size(x,1)*size(x,2),1)
-    for z=1:size(x,3)
-        yv = @view(y[:,:,z])
-        xv = @view(x[:,:,z])
-        multi_convolution_fast!(yv,xv,m,Ap,Bp,enum_indx,mul_buff)
-    end
-    return y
-end
-
-@inline function im2col_p(Ao::Matrix{Float32}, m::Int64)
-    A = zeros(Float32, size(Ao,1)+m-1, size(Ao,2))
-    A[1:size(Ao,1),:] .= Ao
-    M,N = size(A)
-    B = Array{eltype(Matrix{Float32})}(undef, m,
-    (M-m+1)*(N))
-    indx = reshape(1:M*N, M,N)[1:M-m+1,1:N]
-    for (i,value) in enumerate(indx)
-        for j=0:(m-1)
-            B[(i-1)*m+1+j]=A[value+j]
-        end
-        #@views B[(i-1)*m+1:(i-1)m+m] = A[value:value+m-1]
-    end
-    return B'
-end
-
-@inline function im2col_p(Ao::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, m::Int64)
-    A = zeros(Float32, size(Ao,1)+m-1, size(Ao,2))
-    A[1:size(Ao,1),:] .= Ao
-    M,N = size(A)
-    B = Array{eltype(Matrix{Float32})}(undef, m,
-    (M-m+1)*(N))
-    indx = reshape(1:M*N, M,N)[1:M-m+1,1:N]
-    for (i,value) in enumerate(indx)
-        for j=0:(m-1)
-            B[(i-1)*m+1+j]=A[value+j]
-        end
-        #@views B[(i-1)*m+1:(i-1)m+m] = A[value:value+m-1]
-    end
-    return B'
-end
-
-
-@inline function im2col_p!(
-    Ao::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
-    m::Int64,
-    A::Matrix{Float32},
-    B::Array{eltype(Matrix{Float32}),2},
-    enum_indx::Base.Iterators.Enumerate{Matrix{Int64}}
-    )
-    @views A[1:size(Ao,1),:] .= Ao
-
-    for (i,value) in enum_indx
-        for j=0:(m-1)
-            B[(i-1)*m+1+j]=A[value+j]
-        end
-        # @views B[(i-1)*m+1:(i-1)*m+m] = A[value:value+m-1]
-
-    end
-    return B'
-end
-
-function dif_convolution(x::Array{Float32,3}, m::Matrix{Float32}, g::Array{Float32,3})
-    dx = zero(x)
-    dm = zero(m)
-    #Buffors and allocs
-    rg = @views zero(g[:,:,1])
-    tmp_dx = zeros(Float32,size(x,1),size(m,2)*size(g,2))
-    tmp_dm = zeros(Float32,size(x,1),size(x,2)*size(g,2))
-    tmp_mul_dx = zeros(Float32,size(g,1)*size(g,2),1)
-    tmp_mul_dm = zeros(Float32,size(x,1)*size(x,2),size(g,2))
-    for z=1:size(x,3)
-        #views
-        dxv = @view(dx[:,:,z])
-        gv = @view(g[:,:,z])
-        xv = @view(x[:,:,z])
-        rg .= reverse(gv, dims=1)
-        fill!(tmp_mul_dm,0.0f0)
-        fill!(tmp_mul_dx,0.0f0)
-        dif_convolution!(dxv,dm,xv,m,gv,rg,tmp_dx,tmp_dm,tmp_mul_dx,tmp_mul_dm)
-    end
-    # bach mean
-    z = size(x,3)
-    dm ./= z
-
-    return (dx, dm)
-end
-
-function dif_convolution!(
-    dx::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
-    dm::Matrix{Float32}, 
-    x::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true}, 
-    m::Matrix{Float32}, 
-    g::SubArray{Float32, 2, Array{Float32, 3}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}, Int64}, true},
-    rg::Matrix{Float32},
-    tmp_dx::Matrix{Float32},
-    tmp_dm::Matrix{Float32},
-    tmp_mul_dx::Matrix{Float32},
-    tmp_mul_dm::Matrix{Float32})
-    mask_count = size(m,2)
-
-    #dx
-    # tmp_dx = zeros(Float32,size(x,1),mask_count*size(g,2))
-    multi_convolution_fast!(tmp_dx, rg, m,tmp_mul_dx)
-    reverse!(tmp_dx,dims=1)
-    for i=1:size(dx,2)
-        @views dx[:,i] = sum(tmp_dx[:,((i-1)*mask_count+1):(1+size(g,2)):end], dims=2)
+    for i in 1:size(x,3)
+        dm .+= reshape(x_cols[:,:,i]' * g[:,:,i], size(m))
     end
 
-    #dm
-    # tmp_dm = zeros(Float32,size(x,1),size(x,2)*size(g,2))
-    multi_convolution_fast!(tmp_dm,x,g,tmp_mul_dm)
-    for i=1:mask_count
-        @views tt = sum(tmp_dm[:, i:(size(g,2)+mask_count):end],dims=2)
-        @views dm[:,i] .+= tt[1:size(m,1),:]
+    rm = reshape(permutedims(reverse(m, dims=1), (1,3,2)), :, size(m,2))
+
+    pad = size(m,1) - 1
+    g_padded = zeros(Float32, size(g,1) + 2 * pad, size(g,2), size(x,3))
+    g_padded[pad+1:end-pad, :, :] .= g
+
+    g_cols = im2col(g_padded, size(m,1))
+
+    for i in 1:size(x,3)
+        dx[:,:,i] .= g_cols[:,:,i] * rm
     end
 
-    return nothing
-end
-
-function dif_convolution(x::Matrix{Float32}, m::Matrix{Float32}, g::Matrix{Float32})
-    dx = zero(x)
-    dm = zero(m)
-    mask_count = size(m,2)
-
-    #dx
-    tmp_x = zeros(Float32,size(x,1),mask_count*size(g,2))
-    rg = reverse(g, dims=1)
-    multi_convolution_fast!(tmp_x, rg, m)
-    reverse!(tmp_x,dims=1)
-    for i=1:size(dx,2)
-        @views dx[:,i] = sum(tmp_x[:,((i-1)*mask_count+1):(1+size(g,2)):end], dims=2)
-    end
-
-    #dm
-    tmp_x = zeros(Float32,size(x,1),size(x,2)*size(g,2))
-    multi_convolution_fast!(tmp_x,x,g)
-    for i=1:mask_count
-        @views tt = sum(tmp_x[:, i:(size(g,2)+mask_count):end],dims=2)
-        @views dm[:,i] = tt[1:size(m,1),:]
-    end
-
-    return tuple(dx,dm)
+    #reverse!(dm,dims=1)
+    return dx, dm
 end
 
 # Max Pool
@@ -373,46 +218,9 @@ function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,
     return tuple(x_new, 1.0f0)
 end
 
-
-#Multiplying and Adding with Tensors
-function dense3Dfun(x::Array{Float32,3}, A::Array{Float32,2}, b::Array{Float32,2})
-    x_new = zeros(Float32, size(A, 1), size(x, 2), size(x, 3))
-    #Multiplying
-    for z=1:size(x, 3)
-        @views x_new[:,:,z] = A * x[:,:,z]
-    end
-    #Adding
-    for z=1:size(x, 3)
-        @views x_new[:,:,z] = x_new[:,:,z] .+ b
-    end
-    return x_new
-end
-
-function dif_dense3Dfun(x::Array{Float32,3}, A::Array{Float32,2}, b::Array{Float32,2}, g::Array{Float32,3})
-    db = zero(b)
-    dx = zero(x)
-    dA = zero(A)
-    
-    #Adding
-    db .= sum(sum(g, dims=2), dims=3)
-
-    #Multiplying    
-    for z=1:size(g,3)
-        @views dA .+= g[:,:,z] * x[:,:,z]'
-        @views dx[:,:,z] .= A' * g[:,:,z]
-    end
-    
-    # bach mean
-    z = size(x,3)
-    #db ./= z
-    #dA ./= z 
-
-    return (dx,dA,db)
-end
-
 #CNN
 conv(x::GraphNode, m::GraphNode) = BroadcastedOperator(conv,x,m)
-forward(::BroadcastedOperator{typeof(conv)}, x, m) = return multi_convolution(x,m)
+forward(::BroadcastedOperator{typeof(conv)}, x, m) = return convolution(x,m)
 backward(::BroadcastedOperator{typeof(conv)}, x, m, g) = return dif_convolution(x,m,g)
 
 max_pool(x::GraphNode, m::GraphNode) = BroadcastedOperator(max_pool,x,m)
@@ -424,10 +232,6 @@ forward(::BroadcastedOperator{typeof(flatten)}, x) = return reshape(x,size(x,1)*
 backward(::BroadcastedOperator{typeof(flatten)}, x, g) = begin
     return (reshape(g,size(x,1),size(x,2),size(x,3)),)
 end
-
-dense3D(x::GraphNode, A::GraphNode,b::GraphNode) = BroadcastedOperator(dense3D,x,A,b)
-forward(::BroadcastedOperator{typeof(dense3D)},x,A,b) = return dense3Dfun(x,A,b)
-backward(::BroadcastedOperator{typeof(dense3D)},x,A,b,g) = return dif_dense3Dfun(x,A,b,g)
 
 reset!(node::Constant) = nothing
 reset!(node::Variable) = node.gradient = zeros(Float32, size(node.output))

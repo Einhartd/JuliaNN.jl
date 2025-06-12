@@ -1,7 +1,7 @@
 module MyMlp
 export xavier_normal, xavier_uniform,
        xavier_normal!, xavier_uniform!,
-       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Dense3D, Chain, TransposeBlock,
+       Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Chain, TransposeBlock,
        Adam, AdamState,
        setup_optimizer, step!,
        build_graph!,
@@ -17,6 +17,11 @@ using Distributions
 # --- Funkcje inicjalizacji wag ---
 function xavier_uniform(size::Tuple{Int, Int})
     limit = sqrt(6.0f0 / (size[1] + size[2]))
+    return Float32.(rand(Uniform(-limit, limit), size))
+end
+
+function xavier_uniform(size::Tuple{Int, Int, Int})
+    limit = sqrt(6.0f0 / (size[1] + size[2] + size[3]))
     return Float32.(rand(Uniform(-limit, limit), size))
 end
 
@@ -77,42 +82,6 @@ function (d::Dense)(x::GraphNode)
              return d.activation(linear_output, name="$(d.name)_$(string(nameof(d.activation)))")
         catch
              return d.activation(linear_output)
-        end
-    end
-end
-
-mutable struct Dense3D <: Layer
-    W::Variable
-    b::Variable
-    activation
-    name::String
-end
-
-function Dense3D(in_features::Int, out_features::Int, activation=identity; 
-    weight_init = xavier_uniform,
-    bias_init = (dims) -> zeros(Float32, dims),
-    name="dense3d")
-
-    W = Variable(weight_init((out_features, in_features)); name="$(name)_w")
-
-    b = Variable(bias_init((out_features, 1)); name="$(name)_b")
-
-    return Dense3D(W, b, activation, name)
-end
-
-function (d::Dense3D)(x::GraphNode)
-    ma = dense3D(x,d.W,d.b)
-    
-    if d.activation == relu
-        return relu(ma, name="$(d.name)_relu")
-    elseif d.activation == σ
-        return σ(ma, name="$(d.name)_sigmoid")
-    else
-        #   Użyj domyślnej nazwy
-        try
-             return d.activation(ma, name="$(d.name)_$(string(nameof(d.activation)))")
-        catch
-             return d.activation(ma)
         end
     end
 end
@@ -204,16 +173,16 @@ Adam(;a=0.001f0) = Adam(a, 0.9f0, 0.999f0, 1e-8)
 
 mutable struct AdamState
     hyperparams :: Adam # Przechowuje konfigurację optymalizatora
-    m :: Dict{String, Matrix{Float32}}
-    v :: Dict{String, Matrix{Float32}}
+    m :: Dict{String, Array{Float32}}
+    v :: Dict{String, Array{Float32}}
     t :: Int
     parameters :: Vector{Tuple{String, Variable}}
 end
 
 function setup_optimizer(optimizer_config::AbstractOptimizer, model::Chain)
     trainable_vars = collect_model_parameters(model)
-    m = Dict{String, Matrix{Float32}}()
-    v = Dict{String, Matrix{Float32}}()
+    m = Dict{String, Array{Float32}}()
+    v = Dict{String, Array{Float32}}()
     for (name, var) in trainable_vars
         m[name] = zeros(Float32, size(var.output))
         v[name] = zeros(Float32, size(var.output))
@@ -270,25 +239,33 @@ end
 
 mutable struct ConvolutionBlock <: Layer
     masks::Variable
+    bias::Variable
     act_fun::Function
     name::String
 end
 
-function ConvolutionBlock(mask_count::Int, mask_size::Int;
+function ConvolutionBlock(mask_x::Int, mask_y::Int,mask_z::Int;
     weight_init = xavier_uniform,
     act_fun=relu,
     name="convolution")
 
-    masks = Variable(weight_init((mask_size, mask_count)); name="$(name)_masks_w")
+    masks = Variable(weight_init((mask_x, mask_y, mask_z)); name="$(name)_masks_w")
+    bias = Variable(zeros(Float32,1,mask_z),name="$(name)_masks_b")
 
-    return ConvolutionBlock(masks, act_fun, name)
+    return ConvolutionBlock(masks, bias, act_fun, name)
 end
 
 function (c::ConvolutionBlock)(x::GraphNode)
     cl = conv(x,c.masks)
     cl.name = "$(c.name)_conv"
 
-    return cl
+    bl = cl + c.bias
+    bl.name = "$(c.name)_bias"
+
+    rl = c.act_fun(bl)
+    rl.name = "$(c.name)_activation"
+
+    return rl
 end
 
 mutable struct PoolingBlock <: Layer
@@ -331,11 +308,7 @@ function collect_model_parameters(::PoolingBlock)
 end
 
 function collect_model_parameters(layer::ConvolutionBlock)
-    return [(layer.masks.name, layer.masks)]
-end
-
-function collect_model_parameters(layer::Dense3D)
-    return [(layer.W.name, layer.W), (layer.b.name, layer.b)]
+    return [(layer.masks.name, layer.masks),(layer.bias.name, layer.bias)]
 end
 
 function collect_model_parameters(::TransposeBlock)
