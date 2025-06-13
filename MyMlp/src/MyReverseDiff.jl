@@ -13,14 +13,6 @@ import LinearAlgebra: mul!
 import Statistics: sum
 
 
-include("TensorOperations.jl")
-using .TensorOperations
-
-
-
-
-# Definition of basic structures for computational graph
-
 abstract type GraphNode end
 abstract type Operator <: GraphNode end
 
@@ -116,12 +108,15 @@ backward(node::BroadcastedOperator{typeof(σ)}, x, g) = begin
     return (grad_wrt_x, )
 end
 
+# transpose operations
 transpose(x::GraphNode; name="Transposition") = BroadcastedOperator(transpose, x, name=name)
 forward(::BroadcastedOperator{typeof(transpose)},x::Matrix{Float32}) = return permutedims(x, (2,1))
 forward(::BroadcastedOperator{typeof(transpose)},x::Array{Float32,3}) = return permutedims(x, (2,1,3))
-backward(::BroadcastedOperator{typeof(transpose)},x,g::Matrix{Float32}) = return permutedims(g, (2,1))
-backward(::BroadcastedOperator{typeof(transpose)},x,g::Array{Float32,3}) = return permutedims(g, (2,1,3))
+backward(::BroadcastedOperator{typeof(transpose)},x,g::Matrix{Float32}) = return (permutedims(g, (2,1)),)
+backward(::BroadcastedOperator{typeof(transpose)},x,g::Array{Float32,3}) = return (permutedims(g, (2,1,3)),)
 
+
+# Binary Cross Entropy
 function binary_cross_entropy_loss_impl(ŷ, y_true; epsilon=1e-10)
     ŷ_clamped = clamp.(ŷ, epsilon, 1.0f0 - epsilon)
     loss_elements = -y_true .* log.(ŷ_clamped) .- (1.0f0 .- y_true) .* log.(1.0f0 .- ŷ_clamped)
@@ -143,6 +138,8 @@ backward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_v
     return (grad_wrt_ŷ, zeros(Float32, size(y_value)))
 end
 
+
+# Convolution
 @inline function im2col(x, k)
     steps = size(x,1) - k + 1
     B = Array{Float32, 3}(undef, steps, size(x,2)*k ,size(x,3))
@@ -188,8 +185,9 @@ function dif_convolution(x::Array{Float32,3}, m::Array{Float32,3}, g::Array{Floa
     return dx, dm
 end
 
-# Max Pool
 
+
+# Max Pool
 function m_pool(x::Array{Float32,3},mf::Matrix{Float32})
     m = Int64(mf[1])
     x_new = zeros(Float32,div(size(x,1),m),size(x,2),size(x,3))
@@ -249,33 +247,26 @@ compute!(node::Variable) = nothing
 
 
 function compute!(node::Operator)
-    # Wywołaj forward, aby otrzymać wynik
     new_output_val = forward(node, [input.output for input in node.inputs]...)
 
-    # Obsługa skalarnych i tablicowych wyjść
-    if isa(node, ScalarOperator) # Jeśli to ScalarOperator
-        node.output = Float32(new_output_val) # Po prostu przypisz wartość, upewniając się, że jest Float32
-        node.gradient = 0.0f0 # Zawsze inicjuj gradient skalarny na 0.0f0
-    else # Jeśli to BroadcastedOperator (lub inny operator z wyjściem tablicowym)
+    if isa(node, ScalarOperator)
+        node.output = Float32(new_output_val)
+        node.gradient = 0.0f0
+    else
         if size(node.output) != size(new_output_val)
-            node.output = new_output_val # Przypisz nową, poprawną tablicę
+            node.output = new_output_val
         else
-            # W przeciwnym razie, skopiuj wartości do istniejącej tablicy
-            # Upewnij się, że typy się zgadzają: Float32
-            copyto!(node.output, Float32.(new_output_val)) # Konwertuj na Float32, jeśli new_output_val jest Float64
+            copyto!(node.output, Float32.(new_output_val))
         end
-
-        # Podobnie dla gradientu:
         if size(node.gradient) != size(node.output)
             node.gradient = zeros(Float32, size(node.output))
         else
-            fill!(node.gradient, 0.0f0) # Wypełnij zerami istniejący gradient
+            fill!(node.gradient, 0.0f0)
         end
     end
 end
 
 function forward!(order::Vector)
-    #   Iteruje przez każdy węzeł w order.
     for node in order
         compute!(node)
         reset!(node)
@@ -295,7 +286,7 @@ update!(node::GraphNode, gradient) = let
 end
 
 function backward!(order::Vector; seed=1.0f0)
-    result = last(order)   #   The output node
+    result = last(order)
     if all(iszero, result.gradient)
         if isa(result.output, AbstractArray{Float32})
             result.gradient = ones(Float32, size(result.output))
@@ -304,9 +295,8 @@ function backward!(order::Vector; seed=1.0f0)
             @assert length(result.output) == 1 "Gradient is defined only for scalar functions"
         end
     end
-
-    for node in reverse(order)   #   Iterate through nodes in reverse topological order.
-        backward!(node)   #   Compute and propagate gradients backwards.
+    for node in reverse(order)
+        backward!(node)
     end
     return nothing
 end
@@ -342,6 +332,5 @@ using .MyEmbedding
 
 # Re-export embedding functions
 export embedding
-
 
 end

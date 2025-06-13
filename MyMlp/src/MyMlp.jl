@@ -69,15 +69,14 @@ end
 function (d::Dense)(x::GraphNode)
 
     multiplication_code = *(d.W, x, name="$(d.name)_mul")
-    #   Dodanie biasu
+
     linear_output = +(multiplication_code, d.b, name="$(d.name)_add")
-    # Przekazanie nazwy operatorowi aktywacji
+
     if d.activation == relu
         return relu(linear_output, name="$(d.name)_relu")
     elseif d.activation == σ
         return σ(linear_output, name="$(d.name)_sigmoid")
     else
-        #   Użyj domyślnej nazwy
         try
              return d.activation(linear_output, name="$(d.name)_$(string(nameof(d.activation)))")
         catch
@@ -125,7 +124,6 @@ function Embedding(initial_weights::Matrix{Float32};
 end
 
 function (e::Embedding)(x::MyReverseDiff.GraphNode)
-    # Wywołuje funkcję `embedding` z modułu MyEmbedding
     return MyEmbedding.embedding(e.W, x; name="$(e.name)_output")
 end
 
@@ -163,10 +161,10 @@ end
 abstract type AbstractOptimizer end
 
 struct Adam <: AbstractOptimizer
-    α :: Float32    # learning rate
-    β1 :: Float32   # First moment decay rate
-    β2 :: Float32   # Second moment decay rate
-    ε :: Float32    # Epsilon for numerical stability
+    α :: Float32
+    β1 :: Float32
+    β2 :: Float32
+    ε :: Float32
 end
 
 Adam(;a=0.001f0) = Adam(a, 0.9f0, 0.999f0, 1e-8)
@@ -211,7 +209,7 @@ end
 function step!(optimizer_state::AdamState)
     optimizer_state.t += 1
 
-    config = optimizer_state.hyperparams # Dostęp do hyperparametrów z konfiguracji
+    config = optimizer_state.hyperparams
 
     for (name, var) in optimizer_state.parameters
         g = var.gradient
