@@ -213,10 +213,17 @@ with direct implications for machine learning, optimization,
 and scientific computing applications.
 
 \section{Implementation idea}
-???
+To implement the project, a backpropagation approach based on a computational graph was chosen. The layers consist of one or more nodes, which serve as components of the computation (Variables and Constants) or represent operations (Operators). Each operator has a forward function (to compute the result) and a backward function (to compute the gradient). Once the graph is created, it undergoes topological sorting, which facilitates both forward and backward passes.
 
-\section{Library architecture}
-???
+In order to enable comparison with existing machine learning libraries, a custom module was developed. 
+
+The project consists of three modules:
+
+\begin{itemize}
+    \item \textbf{MyReverseDiff} – Defines the structure of the graph, node types, and the forward and backward pass operations.
+    \item \textbf{MyMLP} – Defines the layers, the structure of the neural network, and optimizers (e.g., ADAM).
+    \item \textbf{MyEmbedding} – Describes embedding operations.
+\end{itemize}
 
 \section{Difficulties during project}
 ???
@@ -225,11 +232,22 @@ and scientific computing applications.
 ???
 
 \section{Tests}
-???
-Used technologies
+Technologies used for comparison are PyTorch (Python) and Flux (Julia).
 
 \subsection{Used network architecture}
-???
+
+For comparison purposes, a Convolutional Neural Network (CNN) was chosen. Its task is to classify reviews as positive or negative based on their text. The reviews are sourced from the IMDB website.
+
+The network is built using six layers. The first is a preprocessed embedding layer based on GloVe. The second layer swaps the first and second dimensions of the input tensor. The third layer is a convolutional layer that processes the input using 8 filters of size 3×50, followed by a ReLU activation function. The next layer is a max pooling layer that reduces the first dimension by a factor of eight. The fifth layer is a flattening layer. The final layer is a dense layer that reduces the vector to a scalar and passes it through a sigmoid function.
+
+The network input consists of 64 reviews. Each review is a vector of 130 words, represented as indices in the embedding dictionary. The output is 64 values in the range [0, 1], representing whether the reviews are classified as positive or negative. \ref{fig:Network_architecture}
+
+\begin{figure}
+    \centering
+    \includegraphics[height=0.9\linewidth]{Network.png}
+    \caption{Network architecture}
+    \label{fig:Network_architecture}
+\end{figure}
 
 \subsection{Correctness tests}
 ???
@@ -241,10 +259,12 @@ Used technologies
 ??? Tests results
 
 \subsection{Limitations}
-???
+
+In its current state, the project allows for the creation of CNN and MLP networks, but with a very limited selection of activation functions. Creating other types of networks would require users to manually implement the layers as well as the forward and backward operations. Optimizers also pose a limitation, as the only available options are Gradient Descent and ADAM.
 
 \subsection{Possible development directions}
-???
+There are two possible directions for the further development of the project. The first is to improve performance by reducing memory allocation and decreasing training time. This would require continued work on code optimization.
+Another development path is to expand the functions and operators supported by the AD (Automatic Differentiation) library. Increasing the number of activation functions and adding operations essential for other neural network architectures (e.g., RBF, RNN, etc.) would significantly broaden the library's applicability and make it suitable for use in other projects.
 
 \begin{thebibliography}{00}
 \bibitem{b1} M. J. Innes, ``DON'T UNROLL ADJOINT: DIFFERENTIATING SSA-FORM PROGRAMS,'' 2019, arXiv:1810.07951. [Online]. Available: https://arxiv.org/abs/1810.07951
