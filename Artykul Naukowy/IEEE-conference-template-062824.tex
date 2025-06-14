@@ -225,11 +225,19 @@ The project consists of three modules:
     \item \textbf{MyEmbedding} – Describes embedding operations.
 \end{itemize}
 
-\section{Difficulties during project}
-???
-
 \section{Implemented optimization}
-???
+
+In this solution, various methods were applied to improve performance and reduce memory usage:
+
+\begin{itemize}
+    \item \textbf{Parallel batch processing} – Data is processed in parallel in a single pass instead of individually. This significantly reduces the processing time of a single batch without affecting the results.
+    \item \textbf{Using views} – The Julia language offers several macros aimed at increasing code efficiency. One of them is the \textit{@view}/\textit{@views} macro, which turns a matrix slice into a view of the specified segment without copying data.
+    \item \textbf{In-place operations} – Many of the used functions operate in-place without allocating additional memory. Such functions follow the convention of being marked with an exclamation mark (!).
+    \item \textbf{Memory allocation} – To fully benefit from in-place operations, memory is pre-allocated and then reused. This allows for a significant reduction in memory allocation.
+    \item \textbf{Matrix operations} – Many operations are performed on matrices, which are compiled into vectorized operations. These are executed much faster than repeated scalar operations.
+    \item \textbf{Compiler hints} – Macros can guide or enforce stronger code optimizations. Examples include \textit{@inline} and \textit{@inbounds}.
+    \item \textbf{Variable typing} – Specifying types for variables within structures and function arguments allows for better code optimization.
+\end{itemize}
 
 \section{Tests}
 Technologies used for comparison are PyTorch (Python) and Flux (Julia).

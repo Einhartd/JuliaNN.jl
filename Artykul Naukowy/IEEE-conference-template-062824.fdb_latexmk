@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1749841235.01982 "c:/Users/Szymon/Desktop/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" "IEEE-conference-template-062824.pdf" "IEEE-conference-template-062824" 1749841236.11516 0
+["pdflatex"] 1749900809.94104 "c:/Users/Szymon/Desktop/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" "IEEE-conference-template-062824.pdf" "IEEE-conference-template-062824" 1749900810.84143 0
   "C:/Users/Szymon/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1749826725 82507 a9eef8696c92627b87e9975edea03b2a ""
   "C:/Users/Szymon/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1749826707 24225559 4e9013f165d3ae75858c31059d926914 ""
   "C:/Users/Szymon/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/base/8r.enc" 1458473887 4993 80dc9bab7f31fb78a000ccfed0e27cab ""
@@ -73,11 +73,11 @@
   "C:/Users/Szymon/AppData/Local/Programs/MiKTeX/tex/latex/psnfss/ot1ptm.fd" 1585253778 1007 15056f4a61917ceed3a44e4ac11fcc52 ""
   "C:/Users/Szymon/AppData/Local/Programs/MiKTeX/tex/latex/psnfss/ts1ptm.fd" 1585253778 653 96f56dc5d1ef1fe1121f1cfeec70ee0c ""
   "C:/Users/Szymon/AppData/Local/Programs/MiKTeX/tex/latex/xcolor/xcolor.sty" 1700127522 55487 80a65caedd3722f4c20a14a69e785d8f ""
-  "IEEE-conference-template-062824.aux" 1749841235 3099 e243bb1a1efdca29b2516df6fc3ecb10 "pdflatex"
-  "IEEE-conference-template-062824.tex" 1749841234 16050 d901f32148b2dbbcfa11f812250bf867 ""
+  "IEEE-conference-template-062824.aux" 1749900810 2992 ab92d43f70925b8dcb26d2613453ef36 "pdflatex"
+  "IEEE-conference-template-062824.tex" 1749900809 17502 d658ec883d5177f6c76d97b386148652 ""
   "IEEEtran.cls" 1747919899 288304 5b2e4fa15b0f7eabb840ebf67df4c0f7 ""
-  "Network.png" 1749829394 20133 b82244a6f074d79bca70ab23c9f29cc3 ""
-  "c:/Users/Szymon/Desktop/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" 1749841234 16050 d901f32148b2dbbcfa11f812250bf867 ""
+  "Network.png" 1749841333 20133 b82244a6f074d79bca70ab23c9f29cc3 ""
+  "c:/Users/Szymon/Desktop/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" 1749900809 17502 d658ec883d5177f6c76d97b386148652 ""
   (generated)
   "IEEE-conference-template-062824.aux"
   "IEEE-conference-template-062824.log"

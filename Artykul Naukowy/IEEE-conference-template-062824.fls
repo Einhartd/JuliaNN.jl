@@ -164,6 +164,13 @@ INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmb7t.
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmb8r.tfm
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\courier\pcrr7t.vf
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\courier\pcrr8r.tfm
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmr7t.vf
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmrc7t.vf
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmr8r.tfm
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmb7t.vf
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmb8r.tfm
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmr7t.vf
+INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmr8r.tfm
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\tex\latex\psnfss\ts1ptm.fd
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\tex\latex\psnfss\ts1ptm.fd
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\tex\latex\psnfss\ts1ptm.fd
@@ -175,13 +182,6 @@ INPUT .\Network.png
 INPUT .\Network.png
 INPUT .\Network.png
 INPUT .\Network.png
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmr7t.vf
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmrc7t.vf
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmr8r.tfm
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmb7t.vf
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmb8r.tfm
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmr7t.vf
-INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\tfm\adobe\times\ptmr8r.tfm
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\vf\adobe\times\ptmr8c.vf
 INPUT IEEE-conference-template-062824.aux
 INPUT C:\Users\Szymon\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmmi7.pfb
