@@ -24,12 +24,12 @@
 \textit{Warsaw University of Technology}\\
 Warsaw, Poland \\
 01169511@pw.edu.pl}
-% \and
-% \IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
-% \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-% \textit{name of organization (of Aff.)}\\
-% City, Country \\
-% email address or ORCID}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Szymon Rogoziński}
+\IEEEauthorblockA{\textit{Faculty of Electrical Engineering} \\
+\textit{Warsaw University of Technology}\\
+Warsaw, Poland \\
+01169612@pw.edu.pl}
 % \and
 % \IEEEauthorblockN{3\textsuperscript{rd} Given Name Surname}
 % \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
@@ -212,6 +212,167 @@ Julia's competitiveness in the automatic differentiation ecosystem,
 with direct implications for machine learning, optimization, 
 and scientific computing applications.
 
+\section{Implementation idea}
+To implement the project, a backpropagation approach based on a computational graph was chosen. The layers consist of one or more nodes, which serve as components of the computation (Variables and Constants) or represent operations (Operators). Each operator has a forward function (to compute the result) and a backward function (to compute the gradient). Once the graph is created, it undergoes topological sorting, which facilitates both forward and backward passes.
+
+In order to enable comparison with existing machine learning libraries, a custom module was developed. 
+
+The project consists of three modules:
+
+\begin{itemize}
+    \item \textbf{MyReverseDiff} – Defines the structure of the graph, node types, and the forward and backward pass operations.
+    \item \textbf{MyMLP} – Defines the layers, the structure of the neural network, and optimizers (e.g., ADAM).
+    \item \textbf{MyEmbedding} – Describes embedding operations.
+\end{itemize}
+
+\section{Implemented optimization}
+
+In this solution, various methods were applied to improve performance and reduce memory usage:
+
+\begin{itemize}
+    \item \textbf{Parallel batch processing} – Data is processed in parallel in a single pass instead of individually. This significantly reduces the processing time of a single batch without affecting the results.
+    \item \textbf{Using views} – The Julia language offers several macros aimed at increasing code efficiency. One of them is the \textit{@view}/\textit{@views} macro, which turns a matrix slice into a view of the specified segment without copying data.
+    \item \textbf{In-place operations} – Many of the used functions operate in-place without allocating additional memory. Such functions follow the convention of being marked with an exclamation mark (!).
+    \item \textbf{Memory allocation} – To fully benefit from in-place operations, memory is pre-allocated and then reused. This allows for a significant reduction in memory allocation.
+    \item \textbf{Matrix operations} – Many operations are performed on matrices, which are compiled into vectorized operations. These are executed much faster than repeated scalar operations.
+    \item \textbf{Compiler hints} – Macros can guide or enforce stronger code optimizations. Examples include \textit{@inline} and \textit{@inbounds}.
+    \item \textbf{Variable typing} – Specifying types for variables within structures and function arguments allows for better code optimization.
+\end{itemize}
+
+\section{Tests}
+Technologies used for comparison are PyTorch (Python) and Flux (Julia).
+
+\subsection{Used network architecture}
+
+For comparison purposes, a Convolutional Neural Network (CNN) was chosen. Its task is to classify reviews as positive or negative based on their text. The reviews are sourced from the IMDB website.
+
+The network is built using six layers. The first is a preprocessed embedding layer based on GloVe. The second layer swaps the first and second dimensions of the input tensor. The third layer is a convolutional layer that processes the input using 8 filters of size 3×50, followed by a ReLU activation function. The next layer is a max pooling layer that reduces the first dimension by a factor of eight. The fifth layer is a flattening layer. The final layer is a dense layer that reduces the vector to a scalar and passes it through a sigmoid function.
+
+The network input consists of 64 reviews. Each review is a vector of 130 words, represented as indices in the embedding dictionary. The output is 64 values in the range [0, 1], representing whether the reviews are classified as positive or negative [Fig.\ref{fig:Network_architecture}].
+
+\begin{figure}
+    \centering
+    \includegraphics[height=0.9\linewidth]{Network.png}
+    \caption{Network architecture}
+    \label{fig:Network_architecture}
+\end{figure}
+
+\subsection{Efficienty tests}
+To evaluate the computational efficiency of the three implementations, 
+comprehensive performance metrics were collected during training across five epochs. 
+The analysis focused on three key aspects:
+\begin{itemize}
+    \item \textbf{Training Time per Epoch}: The time taken to complete each epoch was 
+    measured, providing insights into the computational efficiency of 
+    each implementation.
+    \item \textbf{Memory Allocation Patterns}: Memory allocation was monitored to assess the efficiency 
+    of memory usage during training. This included tracking the total memory allocated during each epoch.
+    \item \textbf{Learning Convergence Rates}: The convergence of the learning process was evaluated 
+    by analyzing the training and validation loss over epochs.
+\end{itemize}
+
+\subsection{Training time analysis}
+
+Building upon the theoretical performance expectations outlined in the literature review, 
+empirical timing measurements reveal the practical performance characteristics of each implementation.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.45\textwidth]{epoch_time_comparison.png}
+\caption{Training time per epoch comparison across implementations}
+\label{fig:epoch_time}
+\end{figure}
+
+Figure~\ref{fig:epoch_time} presents the training time per epoch for each implementation. 
+PyTorch demonstrates the most consistent performance with stable execution times around 10 seconds 
+per epoch throughout the entire training process. 
+Both Julia implementations exhibit significantly longer first epochs 
+(52.3s for Flux, 48.3s for Custom Implementation) due to Just-In-Time (JIT) compilation overhead. 
+After the initial compilation phase, Flux stabilizes at approximately 13 seconds per epoch, 
+while the Custom Implementation maintains around 37 seconds per epoch, much longer than the other two.
+
+\subsection{Memory allocation analysis}
+Memory allocation patterns were analyzed to assess the efficiency of each implementation.
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.45\textwidth]{memory_allocation_comparison.png}
+\caption{Memory allocation during training across implementations}
+\label{fig:memory_allocation}
+\end{figure}
+
+Figure~\ref{fig:memory_allocation} illustrates the memory allocation patterns during 
+training. PyTorch exhibits the most efficient memory usage,
+with minimal fluctuations and a total allocation of approximately 1.0 GB each epoch.
+Flux.jl shows a more variable memory allocation pattern. First epoch memory usage is 
+significantly higher, with a total allocation of around 52.0 GB. 
+After the initial compilation phase, Flux stabilizes at around 14.0 GB per epoch.
+The Custom Implementation shows the highest memory allocation, first epoch memory usage is
+approximately 48.0 GB, and after the initial compilation phase, it stabilizes at around 37.0 GB per epoch.
+The memory allocation patterns reveal fundamental differences in framework optimization. 
+Julia implementations exhibit increased first-epoch allocation due to JIT compilation overhead, 
+including method caches and LLVM optimization structures. PyTorch's low memory footprint 
+(1 GiB) results from pre-compiled C++/CUDA kernels and mature memory management strategies. 
+The Custom Implementation's high consumption (45 GiB) indicates suboptimal data structures 
+and lack of memory reuse, highlighting optimization opportunities in computational graph management.
+
+
+\subsection{Correctness tests}
+
+To validate the implementation accuracy of the Custom AD library, all three models were evaluated 
+on a test dataset consisting of 10,000 samples from the IMDB sentiment classification dataset. 
+The evaluation process measured both test accuracy and loss using identical methodology across 
+all implementations. Models were set to evaluation mode, and predictions were generated without 
+gradient computation. Test accuracy was calculated as the percentage of correct binary 
+classifications (positive/negative sentiment), while test loss was computed using binary 
+cross-entropy criterion averaged across all test batches.
+
+\begin{table}[h]
+\centering
+\caption{Model Performance Comparison}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Model} & \textbf{Test Accuracy (\%)} & \textbf{Test Loss} \\
+\hline
+PyTorch & 87.71 & 0.3290 \\
+\hline
+Flux.jl & 87.53 & 0.3249 \\
+\hline
+Custom Implementation & 86.22 & 0.3511 \\
+\hline
+\end{tabular}
+\label{tab:model_comparison}
+\end{table}
+
+Table~\ref{tab:model_comparison} 
+presents the final performance metrics obtained after five training epochs.
+The results demonstrate that the Custom Implementation successfully replicates the learning 
+behavior of established frameworks. Despite significant differences in computational efficiency 
+observed in previous tests, all implementations achieve remarkably similar performance metrics. 
+PyTorch achieves the highest test accuracy at 87.71\%, followed closely by Flux.jl at 87.53\%, 
+while the Custom Implementation reaches 86.22\% - a difference of only about 1.0 percentage point. 
+The test loss values follow a similar pattern, with all implementations converging to comparable 
+final loss values (0.3249-0.3511).
+
+\section{Results}
+
+The evaluation reveals significant performance differences across implementations. PyTorch 
+achieves superior efficiency with 10-second epochs and ~1 GiB memory usage, while Julia 
+implementations show JIT overhead initially but stabilize afterward. Despite 47× higher 
+memory consumption, the Custom Implementation demonstrates algorithmic correctness with 
+comparable test accuracy (86.22\% vs 87.71\%).
+
+Although Julia modules have the potential to outperform Python frameworks, significant 
+optimization work remains necessary to achieve competitive performance. The substantial 
+overhead indicates that leveraging Julia's speed advantages requires careful attention 
+to memory management and low-level optimizations beyond basic algorithmic correctness.
+
+\subsection{Limitations}
+
+In its current state, the project allows for the creation of CNN and MLP networks, but with a very limited selection of activation functions. Creating other types of networks would require users to manually implement the layers as well as the forward and backward operations. Optimizers also pose a limitation, as the only available options are Gradient Descent and ADAM.
+
+\subsection{Possible development directions}
+There are two possible directions for the further development of the project. The first is to improve performance by reducing memory allocation and decreasing training time. This would require continued work on code optimization.
+Another development path is to expand the functions and operators supported by the AD (Automatic Differentiation) library. Increasing the number of activation functions and adding operations essential for other neural network architectures (e.g., RBF, RNN, etc.) would significantly broaden the library's applicability and make it suitable for use in other projects.
 
 \begin{thebibliography}{00}
 \bibitem{b1} M. J. Innes, ``DON'T UNROLL ADJOINT: DIFFERENTIATING SSA-FORM PROGRAMS,'' 2019, arXiv:1810.07951. [Online]. Available: https://arxiv.org/abs/1810.07951
