@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1749915986.67022 "/home/oliwier/Repos/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" "IEEE-conference-template-062824.pdf" "IEEE-conference-template-062824" 1749915987.58761 0
-  "/etc/texmf/web2c/texmf.cnf" 1749907783.91439 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/oliwier/Repos/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" 1749915985.60364 23080 fb2455ec915916fbd17a2007f7a18885 ""
+["pdflatex"] 1749979884.72541 "/mnt/c/Users/E14/Documents/GitHub/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" "IEEE-conference-template-062824.pdf" "IEEE-conference-template-062824" 1749979887.33089 0
+  "/etc/texmf/web2c/texmf.cnf" 1745616258.44289 475 c0e671620eb5563b2130f56340a5fde8 ""
+  "/mnt/c/Users/E14/Documents/GitHub/AWiD/Artykul Naukowy/IEEE-conference-template-062824.tex" 1749979884.44005 23041 4c23d2462a36174b9203feda65e28785 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/courier/pcrr7t.tfm" 1136768653 960 379cc0019370a9e0208a0a3f949f847a ""
@@ -79,14 +79,14 @@
   "/usr/share/texlive/texmf-dist/tex/latex/xcolor/xcolor.sty" 1700082560 55487 80a65caedd3722f4c20a14a69e785d8f ""
   "/usr/share/texlive/texmf-dist/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
-  "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1749907798.16039 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
-  "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1749907833 8212770 5afca49c2766dca54baa91dcb92bc599 ""
-  "IEEE-conference-template-062824.aux" 1749915987.54764 3836 931276ac1f7175a4ebf269b14917db97 "pdflatex"
-  "IEEE-conference-template-062824.tex" 1749915985.60364 23080 fb2455ec915916fbd17a2007f7a18885 ""
-  "IEEEtran.cls" 1746453681.91449 281957 5b2e4fa15b0f7eabb840ebf67df4c0f7 ""
-  "Network.png" 1749907395.72838 20133 161d5d90aec0d437417d0598d51164a5 ""
-  "epoch_time_comparison.png" 1749909227.10743 218960 a97951d998e4f70fdb285053f69993aa ""
-  "memory_allocation_comparison.png" 1749912443.02853 146549 6c72675eed38d8970d02215a6f197771 ""
+  "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1745616280.76242 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
+  "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1745616364 8214345 3a2acee7f06b883e677fc82651189f93 ""
+  "IEEE-conference-template-062824.aux" 1749979887.18138 3836 5dcdb091063b0af3f97fcb28ed5b03b3 "pdflatex"
+  "IEEE-conference-template-062824.tex" 1749979884.44005 23041 4c23d2462a36174b9203feda65e28785 ""
+  "IEEEtran.cls" 1749979546.62095 281957 5b2e4fa15b0f7eabb840ebf67df4c0f7 ""
+  "Network.png" 1749979053.26472 20133 161d5d90aec0d437417d0598d51164a5 ""
+  "epoch_time_comparison.png" 1749979053.26472 218960 a97951d998e4f70fdb285053f69993aa ""
+  "memory_allocation_comparison.png" 1749979053.26472 146549 6c72675eed38d8970d02215a6f197771 ""
   (generated)
   "IEEE-conference-template-062824.aux"
   "IEEE-conference-template-062824.log"
