@@ -1,4 +1,11 @@
+"""
+MyMlp.jl
+
+High-level neural network components including layers, optimizers, and model building.
+Supports both MLPs and CNNs with various layer types and Adam optimization.
+"""
 module MyMlp
+
 export xavier_normal, xavier_uniform,
        xavier_normal!, xavier_uniform!,
        Dense, Embedding, ConvolutionBlock, PoolingBlock, FlattenBlock, Chain, TransposeBlock,
@@ -8,13 +15,11 @@ export xavier_normal, xavier_uniform,
        collect_model_parameters,
        show, summary, reset!
 
-
 using ..MyReverseDiff
 using ..MyEmbedding
 using Distributions
 
-
-# --- Funkcje inicjalizacji wag ---
+# Weight initialization functions
 function xavier_uniform(size::Tuple{Int, Int})
     limit = sqrt(6.0f0 / (size[1] + size[2]))
     return Float32.(rand(Uniform(-limit, limit), size))
@@ -42,11 +47,9 @@ function xavier_normal!(w::Matrix{Float32})
     Float32.(rand!(Normal(0.0f0, limit), w))
 end
 
-# --- Abstrakcyjny typ warstwy ---
 abstract type Layer end
 
-
-# --- Warstwa Dense ---
+# Dense (fully-connected) layer: output = activation(W * input + b)
 mutable struct Dense <: Layer
     W::Variable
     b::Variable
@@ -60,16 +63,13 @@ function Dense(in_features::Int, out_features::Int, activation=identity;
     name="dense")
 
     W = Variable(weight_init((out_features, in_features)); name="$(name)_w")
-
     b = Variable(bias_init((out_features, 1)); name="$(name)_b")
 
     return Dense(W, b, activation, name)
 end
 
 function (d::Dense)(x::GraphNode)
-
     multiplication_code = *(d.W, x, name="$(d.name)_mul")
-
     linear_output = +(multiplication_code, d.b, name="$(d.name)_add")
 
     if d.activation == relu
@@ -85,6 +85,7 @@ function (d::Dense)(x::GraphNode)
     end
 end
 
+# Transpose layer for reshaping tensors
 mutable struct TransposeBlock <:Layer
     name::String
 end
@@ -99,9 +100,9 @@ function (t::TransposeBlock)(x::GraphNode)
     return tr
 end
 
-# --- Warstwa Embedding ---
+# Embedding layer for discrete token to dense vector mapping
 mutable struct Embedding <: Layer
-    W::Variable # Węzeł GraphNode przechowujący macierz embeddingów
+    W::Variable
     name::String
 end
 
@@ -127,8 +128,7 @@ function (e::Embedding)(x::MyReverseDiff.GraphNode)
     return MyEmbedding.embedding(e.W, x; name="$(e.name)_output")
 end
 
-
-# --- Warstwa Chain ---
+# Sequential model container
 mutable struct Chain
     layers::Vector{<:Layer}
 end
@@ -143,6 +143,7 @@ function (c::Chain)(x::GraphNode)
     return input
 end
 
+# Build complete computational graph for training
 function build_graph!(model::Chain, loss_fn, input_node::GraphNode, label_node::GraphNode; loss_name="loss")
 
     model_output_node = model(input_node)
@@ -155,9 +156,9 @@ function build_graph!(model::Chain, loss_fn, input_node::GraphNode, label_node::
     order = topological_sort(loss_node)
 
     return (loss_node, model_output_node, order)
-
 end
 
+# Adam optimizer
 abstract type AbstractOptimizer end
 
 struct Adam <: AbstractOptimizer
@@ -170,7 +171,7 @@ end
 Adam(;a=0.001f0) = Adam(a, 0.9f0, 0.999f0, 1e-8)
 
 mutable struct AdamState
-    hyperparams :: Adam # Przechowuje konfigurację optymalizatora
+    hyperparams :: Adam
     m :: Dict{String, Array{Float32}}
     v :: Dict{String, Array{Float32}}
     t :: Int
@@ -196,8 +197,6 @@ function collect_model_parameters(model::Chain)
     return all_params
 end
 
-#   Funkcje pomocnicze do zbierania parametrów z warstw
-
 function collect_model_parameters(layer::Dense)
     return [(layer.W.name, layer.W), (layer.b.name, layer.b)]
 end
@@ -206,6 +205,11 @@ function collect_model_parameters(layer::Embedding)
     return [(layer.W.name, layer.W)]
 end
 
+function collect_model_parameters(layer::ConvolutionBlock)
+    return [(layer.masks.name, layer.masks),(layer.bias.name, layer.bias)]
+end
+
+# Adam optimization step
 function step!(optimizer_state::AdamState)
     optimizer_state.t += 1
 
@@ -226,15 +230,13 @@ end
 
 function reset!(optimizer_state::AdamState)
     optimizer_state.t = 0
-    #  Reset momentów
     for (name, var) in optimizer_state.parameters
         optimizer_state.m[name] .= zeros(size(var.output))
         optimizer_state.v[name] .= zeros(size(var.output))
     end
 end
 
-# Convolution
-
+# Convolution layer
 mutable struct ConvolutionBlock <: Layer
     masks::Variable
     bias::Variable
@@ -266,6 +268,7 @@ function (c::ConvolutionBlock)(x::GraphNode)
     return rl
 end
 
+# Max pooling layer
 mutable struct PoolingBlock <: Layer
     name::String
     pool_fun::Function
@@ -283,6 +286,7 @@ function (p::PoolingBlock)(x::GraphNode)
     return pl
 end
 
+# Flatten layer for converting 3D to 2D
 mutable struct FlattenBlock <: Layer
     name::String
 end
@@ -297,6 +301,7 @@ function (f::FlattenBlock)(x::GraphNode)
     return fl
 end
 
+# Parameter collection for layers without parameters
 function collect_model_parameters(::FlattenBlock)
     return []
 end
@@ -305,13 +310,8 @@ function collect_model_parameters(::PoolingBlock)
     return []
 end
 
-function collect_model_parameters(layer::ConvolutionBlock)
-    return [(layer.masks.name, layer.masks),(layer.bias.name, layer.bias)]
-end
-
 function collect_model_parameters(::TransposeBlock)
     return []
 end
 
 end # module MyMlp
-

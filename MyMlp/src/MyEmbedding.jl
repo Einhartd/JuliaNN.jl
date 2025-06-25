@@ -1,4 +1,9 @@
-# MyEmbedding.jl
+"""
+MyEmbedding.jl
+
+Embedding layer for mapping discrete indices to dense vectors.
+Used in NLP for word embeddings and other discrete token representations.
+"""
 module MyEmbedding
 
 using ..MyReverseDiff
@@ -6,16 +11,15 @@ import ..MyReverseDiff: GraphNode, BroadcastedOperator, forward, backward
 
 export embedding
 
-
+# Creates embedding lookup operation in computational graph
 embedding(embeddings_node::GraphNode, indices_node::GraphNode; name="embedding") = BroadcastedOperator(embedding, embeddings_node, indices_node, name=name)
 
-
+# Forward pass: lookup embeddings for given indices
 function forward(::BroadcastedOperator{typeof(embedding)}, embeddings_val::Matrix{Float32}, indices_val::Matrix{Float32})
     embedding_dim, vocab_size = size(embeddings_val)
     sequence_length, batch_size = size(indices_val)
 
     result = zeros(Float32, embedding_dim, sequence_length, batch_size)
-
     actual_indices = round.(Int, indices_val)
 
     for b in 1:batch_size
@@ -32,13 +36,12 @@ function forward(::BroadcastedOperator{typeof(embedding)}, embeddings_val::Matri
     return result
 end
 
-
+# Backward pass: accumulate gradients for accessed embeddings
 function backward(node::BroadcastedOperator{typeof(embedding)}, embeddings_val::Matrix{Float32}, indices_val::Matrix{Float32}, g::AbstractArray{Float32})
 
     embedding_node_g = zeros(Float32, size(embeddings_val))
     batch_size = size(node.output, 3)
 
-    
     padding_index = size(embeddings_val, 2)
     
     for b in 1:batch_size
@@ -50,6 +53,7 @@ function backward(node::BroadcastedOperator{typeof(embedding)}, embeddings_val::
         end
     end
 
+    # Zero out gradients for padding index
     if padding_index >= 1 && padding_index <= size(embeddings_val, 2)
         embedding_node_g[:, padding_index] .= 0.0f0
     end

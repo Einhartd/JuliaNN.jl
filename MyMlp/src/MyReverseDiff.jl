@@ -1,4 +1,11 @@
+"""
+MyReverseDiff.jl
+
+Custom automatic differentiation library implementing reverse-mode differentiation 
+for neural networks with computational graph construction and backpropagation.
+"""
 module MyReverseDiff
+
 export topological_sort, forward!, backward!, reset!, update!, compute!,
        binarycrossentropy, dense3D, relu, transpose, σ, *, +, conv, max_pool, flatten, AdamState, setup_optimizer,
        show, summary
@@ -7,19 +14,20 @@ export Constant, Variable, ScalarOperator, BroadcastedOperator, GraphNode, Opera
 using Statistics
 using Distributions
 
-
 import Base: *, +, clamp, log, exp
 import LinearAlgebra: mul!
 import Statistics: sum
 
-
+# Computational graph node types
 abstract type GraphNode end
 abstract type Operator <: GraphNode end
 
+# Constant value in computational graph (input data, labels)
 mutable struct Constant{T} <: GraphNode
     output :: T
 end
 
+# Trainable parameter with gradients
 mutable struct Variable{T<:AbstractArray{Float32}} <: GraphNode
     output :: T
     gradient :: T
@@ -28,6 +36,7 @@ mutable struct Variable{T<:AbstractArray{Float32}} <: GraphNode
     Variable(output::T; name="?") where {T<:AbstractArray{Float32}} = new{T}(output, zeros(Float32, size(output)), name)
 end
 
+# Operations producing scalar outputs (loss functions)
 mutable struct ScalarOperator{F} <: Operator
     inputs :: Tuple{GraphNode, GraphNode}
     output :: Float32
@@ -36,6 +45,7 @@ mutable struct ScalarOperator{F} <: Operator
     ScalarOperator(fun, inputs...; name="?") = new{typeof(fun)}(inputs, 0.0f0, 0.0f0, name)
 end
 
+# Operations producing array outputs (matrix ops, activations)
 mutable struct BroadcastedOperator{F} <: Operator
     inputs :: NTuple{N, GraphNode} where N
     output :: AbstractArray{Float32}
@@ -44,9 +54,9 @@ mutable struct BroadcastedOperator{F} <: Operator
     BroadcastedOperator(fun, inputs...; name="?") = new{typeof(fun)}(inputs, zeros(Float32, 1, 1), zeros(Float32, 1, 1), name)
 end
 
+# Topological sorting for execution order
 function visit(node::GraphNode, visited, order)
-    if node ∈ visited
-    else
+    if node ∉ visited
         push!(visited, node)
         push!(order, node)
     end
@@ -54,8 +64,7 @@ function visit(node::GraphNode, visited, order)
 end
 
 function visit(node::Operator, visited, order)
-    if node ∈ visited
-    else
+    if node ∉ visited
         push!(visited, node)
         for input in node.inputs
             visit(input, visited, order)
@@ -72,21 +81,19 @@ function topological_sort(head::GraphNode)
     return order
 end
 
-# x * y (aka matrix multiplication)
+# Matrix multiplication
 *(A::GraphNode, x::GraphNode; name="mul") = BroadcastedOperator(mul!, A, x, name=name)
 forward(::BroadcastedOperator{typeof(mul!)}, A, x) = return A * x
 backward(::BroadcastedOperator{typeof(mul!)}, A, x, g) = tuple(g * x', A' * g)
 
-# relu activation
+# ReLU activation
 relu(x::GraphNode; name="relu") = BroadcastedOperator(relu, x, name=name)
 forward(::BroadcastedOperator{typeof(relu)}, x) = return x .* (x .> 0.0f0)
 backward(::BroadcastedOperator{typeof(relu)}, x, g) = tuple(g .* (x .> 0.0f0))
 
-# add operation (for bias)
+# Addition with broadcasting
 +(x::GraphNode, y::GraphNode; name="sum") = BroadcastedOperator(+, x, y, name=name)
-forward(::BroadcastedOperator{typeof(+)}, x, y) = begin
-    return x .+ y
-end
+forward(::BroadcastedOperator{typeof(+)}, x, y) = return x .+ y
 backward(::BroadcastedOperator{typeof(+)}, x, y, g::Array{Float32,2}) = begin
     grad_wrt_x = g
     grad_wrt_y = sum(g, dims=2)
@@ -98,7 +105,7 @@ backward(::BroadcastedOperator{typeof(+)}, x, y, g::Array{Float32,3}) = begin
     return (grad_wrt_x, grad_wrt_y)
 end
 
-# sigmoid activation
+# Sigmoid activation
 σ(x::GraphNode; name="sigmoid") = BroadcastedOperator(σ, x, name=name)
 forward(::BroadcastedOperator{typeof(σ)}, x) = return 1.0f0 ./ (1.0f0 .+ exp.(-x))
 backward(node::BroadcastedOperator{typeof(σ)}, x, g) = begin
@@ -108,15 +115,14 @@ backward(node::BroadcastedOperator{typeof(σ)}, x, g) = begin
     return (grad_wrt_x, )
 end
 
-# transpose operations
+# Transpose operations
 transpose(x::GraphNode; name="Transposition") = BroadcastedOperator(transpose, x, name=name)
 forward(::BroadcastedOperator{typeof(transpose)},x::Matrix{Float32}) = return permutedims(x, (2,1))
 forward(::BroadcastedOperator{typeof(transpose)},x::Array{Float32,3}) = return permutedims(x, (2,1,3))
 backward(::BroadcastedOperator{typeof(transpose)},x,g::Matrix{Float32}) = return (permutedims(g, (2,1)),)
 backward(::BroadcastedOperator{typeof(transpose)},x,g::Array{Float32,3}) = return (permutedims(g, (2,1,3)),)
 
-
-# Binary Cross Entropy
+# Binary Cross Entropy Loss
 function binary_cross_entropy_loss_impl(ŷ, y_true; epsilon=1e-10)
     ŷ_clamped = clamp.(ŷ, epsilon, 1.0f0 - epsilon)
     loss_elements = -y_true .* log.(ŷ_clamped) .- (1.0f0 .- y_true) .* log.(1.0f0 .- ŷ_clamped)
@@ -138,8 +144,7 @@ backward(::ScalarOperator{typeof(binary_cross_entropy_loss_impl)}, ŷ_value, y_v
     return (grad_wrt_ŷ, zeros(Float32, size(y_value)))
 end
 
-
-# Convolution
+# Convolution helpers
 @inline function im2col(x, k)
     steps = size(x,1) - k + 1
     B = Array{Float32, 3}(undef, steps, size(x,2)*k ,size(x,3))
@@ -181,13 +186,10 @@ function dif_convolution(x::Array{Float32,3}, m::Array{Float32,3}, g::Array{Floa
         dx[:,:,i] .= g_cols[:,:,i] * rm
     end
 
-    #reverse!(dm,dims=1)
     return dx, dm
 end
 
-
-
-# Max Pool
+# Max pooling
 function m_pool(x::Array{Float32,3},mf::Matrix{Float32})
     m = Int64(mf[1])
     x_new = zeros(Float32,div(size(x,1),m),size(x,2),size(x,3))
@@ -216,7 +218,7 @@ function dif_max_pool(x::Array{Float32,3},mf::Matrix{Float32}, g::Array{Float32,
     return tuple(x_new, 1.0f0)
 end
 
-#CNN
+# CNN operations for computational graph
 conv(x::GraphNode, m::GraphNode) = BroadcastedOperator(conv,x,m)
 forward(::BroadcastedOperator{typeof(conv)}, x, m) = return convolution(x,m)
 backward(::BroadcastedOperator{typeof(conv)}, x, m, g) = return dif_convolution(x,m,g)
@@ -231,6 +233,7 @@ backward(::BroadcastedOperator{typeof(flatten)}, x, g) = begin
     return (reshape(g,size(x,1),size(x,2),size(x,3)),)
 end
 
+# Graph execution functions
 reset!(node::Constant) = nothing
 reset!(node::Variable) = node.gradient = zeros(Float32, size(node.output))
 
@@ -244,7 +247,6 @@ end
 
 compute!(node::Constant) = nothing
 compute!(node::Variable) = nothing
-
 
 function compute!(node::Operator)
     new_output_val = forward(node, [input.output for input in node.inputs]...)
@@ -273,7 +275,6 @@ function forward!(order::Vector)
     end
     return last(order).output
 end
-
 
 update!(node::Constant, gradient) = nothing
 
@@ -315,7 +316,6 @@ function backward!(node::Operator)
     return nothing
 end
 
-
 import Base: show, summary
 show(io::IO, x::ScalarOperator{F}) where {F} = print(io, "op ", x.name, "(", F, ")");
 show(io::IO, x::BroadcastedOperator{F}) where {F} = print(io, "op.", x.name, "(", F, ")");
@@ -326,11 +326,9 @@ show(io::IO, x::Variable) = begin
     print(io, "\n ┗━ ∇ ");  summary(io, x.gradient)
 end
 
-# Include submodule
+# Include and re-export embedding functionality
 include("MyEmbedding.jl")
 using .MyEmbedding
-
-# Re-export embedding functions
 export embedding
 
 end
